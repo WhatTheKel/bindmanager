@@ -1,0 +1,111 @@
+{% extends "manage/base.html" %}
+{% block title %}Dashboard — Manage{% endblock %}
+{% block nav_dashboard %}active{% endblock %}
+{% block sb_dashboard %}active{% endblock %}
+
+{% block manage_content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Dashboard</div>
+    <div class="page-subtitle">Overview of your DNS infrastructure</div>
+  </div>
+</div>
+
+<!-- Stats -->
+<div class="stats-row">
+  <div class="stat-card">
+    <div class="label">Zones</div>
+    <div class="value">{{ zone_count }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Records</div>
+    <div class="value">{{ record_count }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Nameservers</div>
+    <div class="value">{{ ns_count }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Pending Sync</div>
+    <div class="value" {% if dirty_count %}style="color:var(--warning)"{% endif %}>{{ dirty_count }}</div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem">
+
+  <!-- Dirty zones -->
+  <div class="card">
+    <div class="card-header">
+      <span>Pending Sync</span>
+      <a href="{% url 'dns_manager:manage_zone_list' %}" class="btn btn-ghost" style="font-size:.75rem;padding:.3rem .65rem">View all</a>
+    </div>
+    {% if dirty_zones %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Zone</th><th>Type</th></tr></thead>
+        <tbody>
+          {% for z in dirty_zones %}
+          <tr>
+            <td><a href="{% url 'dns_manager:manage_zone_detail' z.pk %}" style="font-weight:600">{{ z.name }}</a></td>
+            <td><span class="badge badge-neutral">{{ z.get_zone_type_display }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty" style="padding:1.5rem">
+      <div style="color:var(--success);font-size:1.5rem;margin-bottom:.4rem">✓</div>
+      <p>All zones are synced.</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Recent activity -->
+  <div class="card">
+    <div class="card-header">
+      <span>Recent Activity</span>
+      <a href="{% url 'dns_manager:manage_audit_log' %}" class="btn btn-ghost" style="font-size:.75rem;padding:.3rem .65rem">Full log</a>
+    </div>
+    {% if recent_logs %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Action</th><th>Detail</th><th>User</th><th>When</th></tr></thead>
+        <tbody>
+          {% for log in recent_logs %}
+          <tr>
+            <td>
+              {% if log.action == 'create' %}<span class="badge badge-green">Create</span>
+              {% elif log.action == 'update' %}<span class="badge badge-blue">Update</span>
+              {% elif log.action == 'delete' %}<span class="badge badge-red">Delete</span>
+              {% elif log.action == 'sync' %}<span class="badge badge-amber">Sync</span>
+              {% elif log.action == 'login' %}<span class="badge badge-green">Login</span>
+              {% elif log.action == 'logout' %}<span class="badge badge-neutral">Logout</span>
+              {% elif log.action == 'login_fail' %}<span class="badge badge-red">Login Fail</span>
+              {% else %}<span class="badge badge-neutral">{{ log.action|capfirst }}</span>{% endif %}
+            </td>
+            <td style="font-size:.82rem">{{ log.detail|truncatechars:40 }}</td>
+            <td>{{ log.user.username|default:"system" }}</td>
+            <td style="color:var(--text-muted);font-size:.78rem;white-space:nowrap">{{ log.created_at|timesince }} ago</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty" style="padding:1.5rem"><p>No activity yet.</p></div>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- Quick actions -->
+<div class="card" style="margin-top:1.25rem">
+  <div class="card-header">Quick Actions</div>
+  <div class="card-body" style="display:flex;gap:.75rem;flex-wrap:wrap">
+    <a href="{% url 'dns_manager:manage_zone_add' %}" class="btn btn-primary">+ Add Zone</a>
+    <a href="{% url 'dns_manager:manage_nameserver_add' %}" class="btn btn-ghost">+ Add Nameserver</a>
+    {% if user.is_superuser %}<a href="/api/v1/" class="btn btn-ghost">REST API</a>{% endif %}
+  </div>
+</div>
+{% endblock %}

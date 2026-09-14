@@ -1,0 +1,17 @@
+// This container is a real answering nameserver (unlike the app host's
+// `bind` hidden-primary service) — it's what resolvers actually query.
+//
+// No explicit controls{} block: Debian's bind9 package auto-generates
+// /etc/bind/rndc.key at install time and implicitly trusts it on
+// 127.0.0.1:953 with no controls{} clause needed — both named and the
+// agent's plain `rndc` calls use it automatically. Nothing external ever
+// needs to reach this control channel, so it's never exposed past loopback.
+
+options {
+    directory "/var/cache/bind";
+    recursion no;
+    dnssec-validation auto;
+    listen-on { any; };
+    listen-on-v6 { any; };
+    allow-transfer { none; };   // no AXFR out by default — adjust per deployment
+};

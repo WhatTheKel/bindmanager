@@ -1,0 +1,109 @@
+{% extends "manage/base.html" %}
+{% block title %}{{ title }} — Manage{% endblock %}
+{% block sb_users %}active{% endblock %}
+
+{% block manage_content %}
+<nav class="breadcrumbs">
+  <a href="{% url 'dns_manager:manage_dashboard' %}">Dashboard</a>
+  <span class="sep">›</span>
+  <a href="{% url 'dns_manager:manage_user_list' %}">Users</a>
+  <span class="sep">›</span>
+  <span class="crumb-current">{{ title }}</span>
+</nav>
+
+<div class="page-header">
+  <div class="page-title">{{ title }}</div>
+</div>
+
+<form method="post" style="max-width:620px">
+  {% csrf_token %}
+  <div class="card">
+    <div class="card-body">
+
+      {% if form.non_field_errors %}
+      <div class="alert alert-danger" style="margin-bottom:1rem">
+        {% for e in form.non_field_errors %}<p>{{ e }}</p>{% endfor %}
+      </div>
+      {% endif %}
+
+      <div class="form-grid-2">
+        <div class="form-group">
+          <label class="form-label" for="{{ form.first_name.id_for_label }}">First Name</label>
+          {{ form.first_name }}
+          {% if form.first_name.errors %}<ul class="form-errors">{% for e in form.first_name.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="{{ form.last_name.id_for_label }}">Last Name</label>
+          {{ form.last_name }}
+          {% if form.last_name.errors %}<ul class="form-errors">{% for e in form.last_name.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="{{ form.username.id_for_label }}">Username <span style="color:var(--danger)">*</span></label>
+        {{ form.username }}
+        {% if form.username.errors %}<ul class="form-errors">{% for e in form.username.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="{{ form.email.id_for_label }}">Email</label>
+        {{ form.email }}
+        {% if form.email.errors %}<ul class="form-errors">{% for e in form.email.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+      </div>
+
+      {% if is_create %}
+      <div class="form-group">
+        <label class="form-label" for="{{ form.password1.id_for_label }}">Password <span style="color:var(--danger)">*</span></label>
+        {{ form.password1 }}
+        {% if form.password1.errors %}<ul class="form-errors">{% for e in form.password1.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+        <div class="form-hint">{{ form.password1.help_text }}</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="{{ form.password2.id_for_label }}">Confirm Password <span style="color:var(--danger)">*</span></label>
+        {{ form.password2 }}
+        {% if form.password2.errors %}<ul class="form-errors">{% for e in form.password2.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+      </div>
+      {% endif %}
+
+      <div style="border-top:1px solid var(--border);margin:1.25rem 0 1rem"></div>
+      <div class="form-group" style="margin-bottom:.5rem">
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.875rem">
+          {{ form.is_staff }}
+          <span>Staff — can access the management panel</span>
+        </label>
+      </div>
+      <div class="form-group" style="margin-bottom:.5rem">
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.875rem">
+          {{ form.is_superuser }}
+          <span>Superuser — full access including user management and API docs</span>
+        </label>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.875rem">
+          {{ form.is_active }}
+          <span>Active — inactive users cannot log in</span>
+        </label>
+      </div>
+
+      {% if social_auths %}
+      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:7px;padding:.65rem 1rem;margin-top:1rem;font-size:.82rem;color:var(--text-muted)">
+        <strong style="color:var(--text)">SSO account</strong> — authenticates via
+        {% for sa in social_auths %}
+          {% if sa.provider == 'authentik' %}Authentik
+          {% elif sa.provider == 'okta-openidconnect' %}Okta
+          {% else %}{{ sa.provider }}{% endif %}{% if not forloop.last %}, {% endif %}
+        {% endfor %}.
+        Name, username, and email are managed by the identity provider and cannot be edited here.
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary">{% if is_create %}Create User{% else %}Save Changes{% endif %}</button>
+    <a href="{% url 'dns_manager:manage_user_list' %}" class="btn btn-ghost">Cancel</a>
+  </div>
+</form>
+{% endblock %}

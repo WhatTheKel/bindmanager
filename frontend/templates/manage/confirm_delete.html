@@ -1,0 +1,32 @@
+{% extends "manage/base.html" %}
+{% block title %}Delete {{ object_type }} — Manage{% endblock %}
+
+{% block manage_content %}
+<div style="max-width:480px;margin:2rem auto">
+  <div class="card">
+    <div class="card-header" style="color:var(--danger)">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:.35rem">
+        <polyline points="3 6 5 6 21 6"/>
+        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+        <path d="M10 11v6M14 11v6"/>
+        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+      </svg>
+      Delete {{ object_type }}
+    </div>
+    <div class="card-body">
+      <p style="margin-bottom:1rem">Are you sure you want to delete this {{ object_type|lower }}?</p>
+      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:7px;padding:.75rem 1rem;margin-bottom:1.25rem;font-family:monospace;font-size:.875rem;word-break:break-all">
+        {{ object_name }}
+      </div>
+      <p style="color:var(--text-muted);font-size:.85rem">This action cannot be undone.</p>
+    </div>
+    <div class="form-actions" style="padding:1rem 1.25rem;margin-top:0;border-top:1px solid var(--border)">
+      <form method="post" style="display:inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Yes, delete</button>
+      </form>
+      <a href="{{ back_url }}" class="btn btn-ghost">Cancel</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

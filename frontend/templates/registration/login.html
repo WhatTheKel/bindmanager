@@ -1,0 +1,548 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign In — {{ BRANDING_APP_NAME }}</title>
+  <link rel="icon" href="{% if BRANDING_FAVICON_URL %}{{ BRANDING_FAVICON_URL }}{% else %}{% static 'favicon.ico' %}{% endif %}" type="image/x-icon">
+  <link rel="stylesheet" href="{% static 'css/theme.css' %}">
+  <script>
+    (function(){
+      try {
+        var t = localStorage.getItem('theme');
+        if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch(_) {}
+    })();
+  </script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    /* ── Brand panel (left) ─────────────────────────────────── */
+    .brand-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 3rem 2.5rem;
+      position: relative;
+      overflow: hidden;
+      /* Light mode: clean slate-navy that reads as "dark sidebar" */
+      background: linear-gradient(150deg, #0d1525 0%, #112040 50%, #0f2952 100%);
+    }
+
+    /* Dark mode: mid-depth navy — lighter than --bg so it reads clearly */
+    [data-theme="dark"] .brand-panel {
+      background: linear-gradient(150deg, #0f1e38 0%, #162845 50%, #1a3358 100%);
+    }
+
+    /* Dot grid */
+    .brand-panel::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(rgba(255,255,255,.06) 1px, transparent 1px);
+      background-size: 26px 26px;
+      pointer-events: none;
+    }
+
+    /* Glow orbs */
+    .orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(60px);
+      pointer-events: none;
+    }
+    .orb-1 {
+      width: 400px; height: 400px;
+      top: -100px; right: -100px;
+      background: radial-gradient(circle, rgba(59,130,246,.18) 0%, transparent 70%);
+    }
+    .orb-2 {
+      width: 320px; height: 320px;
+      bottom: -80px; left: -80px;
+      background: radial-gradient(circle, rgba(99,102,241,.14) 0%, transparent 70%);
+    }
+
+    .brand-inner {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      max-width: 340px;
+    }
+
+    .brand-logo {
+      height: 72px;
+      width: auto;
+      margin-bottom: 1.5rem;
+      filter: brightness(0) invert(1);
+      opacity: .95;
+    }
+
+    .brand-name {
+      font-size: 2rem;
+      font-weight: 800;
+      color: #fff;
+      letter-spacing: -.5px;
+      margin-bottom: .4rem;
+    }
+
+    .brand-tagline {
+      font-size: .9rem;
+      color: rgba(255,255,255,.65);
+      margin-bottom: 2.5rem;
+      line-height: 1.5;
+    }
+
+    .brand-features {
+      display: flex;
+      flex-direction: column;
+      gap: .65rem;
+      text-align: left;
+    }
+
+    .brand-feature {
+      display: flex;
+      align-items: center;
+      gap: .65rem;
+      font-size: .82rem;
+      color: rgba(255,255,255,.8);
+    }
+
+    .feature-check {
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: rgba(255,255,255,.15);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .brand-footer {
+      position: absolute;
+      bottom: 1.5rem;
+      font-size: .72rem;
+      color: rgba(255,255,255,.28);
+      z-index: 1;
+      letter-spacing: .02em;
+    }
+
+    /* ── Form panel (right) ─────────────────────────────────── */
+    .form-panel {
+      width: 420px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 3rem 2.5rem;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      position: relative;
+      animation: panel-in .4s ease both;
+    }
+
+    @keyframes panel-in {
+      from { opacity: 0; transform: translateX(18px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+
+    /* Theme toggle */
+    .login-theme-btn {
+      position: absolute;
+      top: 1.25rem; right: 1.25rem;
+    }
+
+    /* Header */
+    .form-header { margin-bottom: 2rem; }
+    .form-welcome {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -.3px;
+      margin-bottom: .3rem;
+    }
+    .form-subtitle {
+      font-size: .85rem;
+      color: var(--text-muted);
+    }
+
+    /* Error / SSO error */
+    .login-error {
+      display: flex;
+      align-items: flex-start;
+      gap: .5rem;
+      background: var(--danger-bg);
+      color: var(--danger);
+      border: 1px solid var(--danger);
+      border-radius: 9px;
+      padding: .7rem .9rem;
+      font-size: .82rem;
+      margin-bottom: 1.25rem;
+    }
+
+    /* Fields */
+    .login-field { margin-bottom: 1.1rem; }
+    .login-label {
+      display: block;
+      font-size: .75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: .4rem;
+    }
+    .input-wrap { position: relative; }
+    .input-icon {
+      position: absolute;
+      left: .85rem; top: 50%; transform: translateY(-50%);
+      color: var(--text-muted);
+      pointer-events: none;
+      display: flex; align-items: center;
+      transition: color .15s;
+    }
+    .login-input {
+      width: 100%;
+      padding: .65rem .85rem .65rem 2.6rem;
+      border: 1.5px solid var(--border);
+      border-radius: 9px;
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: .9rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .login-input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
+    }
+    .login-input:focus + .input-icon-right,
+    .input-wrap:focus-within .input-icon { color: var(--primary); }
+
+    /* Password toggle */
+    .input-icon-right {
+      position: absolute;
+      right: .75rem; top: 50%; transform: translateY(-50%);
+      background: none; border: none; cursor: pointer;
+      color: var(--text-muted); padding: .2rem;
+      display: flex; align-items: center;
+      border-radius: 4px;
+      transition: color .15s;
+    }
+    .input-icon-right:hover { color: var(--text); }
+    .eye-off { display: none; }
+
+    /* Submit button */
+    .btn-login {
+      width: 100%;
+      padding: .75rem;
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: #fff;
+      border: none;
+      border-radius: 9px;
+      font-size: .9rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: .5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: .5rem;
+      font-family: inherit;
+      transition: opacity .15s, transform .1s;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, .35);
+    }
+    .btn-login:hover  { opacity: .92; transform: translateY(-1px); }
+    .btn-login:active { transform: translateY(0); }
+    .btn-login:disabled { opacity: .6; cursor: not-allowed; transform: none; }
+
+    /* Spinner */
+    .spin {
+      display: none;
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* SSO divider */
+    .sso-divider {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      margin: 1.5rem 0 1rem;
+      color: var(--text-muted);
+      font-size: .75rem;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+    .sso-divider::before,
+    .sso-divider::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+
+    /* SSO buttons */
+    .btn-sso {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: .6rem;
+      width: 100%;
+      padding: .62rem .85rem;
+      border: 1.5px solid var(--border);
+      border-radius: 9px;
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: .875rem;
+      font-weight: 500;
+      text-decoration: none;
+      margin-bottom: .6rem;
+      transition: border-color .15s, background .15s, transform .1s;
+      font-family: inherit;
+    }
+    .btn-sso:hover {
+      border-color: var(--primary);
+      background: var(--surface);
+      transform: translateY(-1px);
+      text-decoration: none;
+      color: var(--text);
+    }
+
+    /* Mobile: stack panels */
+    @media (max-width: 720px) {
+      body { flex-direction: column; }
+      .brand-panel { flex: none; padding: 2.5rem 2rem; min-height: 220px; }
+      .brand-features { display: none; }
+      .brand-logo { height: 48px; margin-bottom: .75rem; }
+      .brand-name { font-size: 1.5rem; }
+      .brand-tagline { margin-bottom: 0; }
+      .brand-footer { display: none; }
+      .form-panel { width: 100%; padding: 2rem 1.5rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Brand panel ───────────────────────────────────────────── -->
+<div class="brand-panel">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+
+  <div class="brand-inner">
+    <img src="{% if BRANDING_LOGO_URL %}{{ BRANDING_LOGO_URL }}{% else %}{% static 'logo.webp' %}{% endif %}" alt="{{ BRANDING_APP_NAME }}" class="brand-logo">
+    <div class="brand-name">{{ BRANDING_APP_NAME }}</div>
+    <div class="brand-tagline">DNS Infrastructure Management<br>powered by BIND9</div>
+
+    <div class="brand-features">
+      <div class="brand-feature">
+        <div class="feature-check">
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </div>
+        Zone &amp; Record Management
+      </div>
+      <div class="brand-feature">
+        <div class="feature-check">
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </div>
+        Automated BIND9 Sync
+      </div>
+      <div class="brand-feature">
+        <div class="feature-check">
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </div>
+        Multi-server HA Support
+      </div>
+      <div class="brand-feature">
+        <div class="feature-check">
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </div>
+        REST API &amp; SSO Ready
+      </div>
+    </div>
+  </div>
+
+  <div class="brand-footer">© {% now "Y" %} {{ BRANDING_APP_NAME }}</div>
+</div>
+
+<!-- ── Form panel ────────────────────────────────────────────── -->
+<div class="form-panel">
+
+  <!-- Theme toggle -->
+  <div class="login-theme-btn">
+    <button id="theme-toggle" aria-label="Toggle theme" title="Toggle light / dark" style="color:var(--text)">
+      <svg class="icon-sun" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="5"/>
+        <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+        <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+      </svg>
+      <svg class="icon-moon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="form-header">
+    <div class="form-welcome">Welcome back</div>
+    <div class="form-subtitle">Sign in to your {{ BRANDING_APP_NAME }} account</div>
+  </div>
+
+  {% if form.errors %}
+  <div class="login-error">
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px">
+      <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+    </svg>
+    Invalid username or password. Please try again.
+  </div>
+  {% endif %}
+
+  {% if request.GET.sso_error %}
+  <div class="login-error">
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px">
+      <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+    </svg>
+    SSO sign-in failed. Please try again or use your local credentials.
+  </div>
+  {% endif %}
+
+  <form method="post" id="login-form">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next }}">
+
+    <!-- Username -->
+    <div class="login-field">
+      <label class="login-label" for="id_username">Username</label>
+      <div class="input-wrap">
+        <span class="input-icon">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
+        </span>
+        <input class="login-input" type="text" id="id_username" name="username"
+               autofocus autocomplete="username" required placeholder="Enter your username">
+      </div>
+    </div>
+
+    <!-- Password -->
+    <div class="login-field">
+      <label class="login-label" for="id_password">Password</label>
+      <div class="input-wrap">
+        <span class="input-icon">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </span>
+        <input class="login-input" type="password" id="id_password" name="password"
+               autocomplete="current-password" required placeholder="Enter your password"
+               style="padding-right:2.6rem">
+        <button type="button" class="input-icon-right" id="pwd-toggle"
+                title="Show / hide password" aria-label="Toggle password visibility">
+          <!-- Eye open -->
+          <svg class="eye-on" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          <!-- Eye off -->
+          <svg class="eye-off" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+            <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+            <line x1="1" y1="1" x2="23" y2="23"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <button type="submit" class="btn-login" id="submit-btn">
+      <span class="spin" id="btn-spin"></span>
+      <span id="btn-text">Sign In</span>
+    </button>
+  </form>
+
+  {% if OKTA_SSO_ENABLED or AUTHENTIK_SSO_ENABLED %}
+  <div class="sso-divider">or continue with</div>
+
+  {% if OKTA_SSO_ENABLED %}
+  <a href="{% url 'social:begin' 'okta-openidconnect' %}{% if next %}?next={{ next }}{% endif %}" class="btn-sso">
+    <!-- Okta brand icon: concentric circles -->
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+      <circle cx="12" cy="12" r="11" fill="#007DC1"/>
+      <circle cx="12" cy="12" r="4.6" fill="#fff"/>
+    </svg>
+    Continue with Okta
+  </a>
+  {% endif %}
+
+  {% if AUTHENTIK_SSO_ENABLED %}
+  <a href="{% url 'social:begin' 'authentik' %}{% if next %}?next={{ next }}{% endif %}" class="btn-sso">
+    <!-- Authentik brand icon -->
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+      <path d="M12 2 3.5 6.5v6C3.5 17.4 7.2 21.7 12 23c4.8-1.3 8.5-5.6 8.5-10.5v-6L12 2z" fill="#FD4B2D"/>
+      <path d="M9 12.5l2 2 4-4" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    Continue with Authentik
+  </a>
+  {% endif %}
+  {% endif %}
+
+</div><!-- end .form-panel -->
+
+<script src="{% static 'js/theme.js' %}"></script>
+<script>
+(function () {
+  /* Password show/hide */
+  var pwdToggle = document.getElementById('pwd-toggle');
+  if (pwdToggle) {
+    pwdToggle.addEventListener('click', function () {
+      var inp    = document.getElementById('id_password');
+      var eyeOn  = document.querySelector('.eye-on');
+      var eyeOff = document.querySelector('.eye-off');
+      if (inp.type === 'password') {
+        inp.type = 'text';
+        eyeOn.style.display  = 'none';
+        eyeOff.style.display = 'block';
+      } else {
+        inp.type = 'password';
+        eyeOn.style.display  = 'block';
+        eyeOff.style.display = 'none';
+      }
+    });
+  }
+
+  /* Loading state on submit */
+  var loginForm = document.getElementById('login-form');
+  if (loginForm) {
+    loginForm.addEventListener('submit', function () {
+      var btn  = document.getElementById('submit-btn');
+      var spin = document.getElementById('btn-spin');
+      var txt  = document.getElementById('btn-text');
+      btn.disabled = true;
+      spin.style.display = 'block';
+      txt.textContent = 'Signing in…';
+    });
+  }
+})();
+</script>
+</body>
+</html>

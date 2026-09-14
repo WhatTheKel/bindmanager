@@ -1,0 +1,10 @@
+[Unit]
+Description=Run bindmanager-agent every 2 minutes
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=2min
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

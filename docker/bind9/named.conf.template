@@ -1,0 +1,32 @@
+// Hidden primary — exists only so the app host's Celery worker has a real
+// `named` to talk to (writer.py's reload_zone() calls `rndc reload <zone>`
+// unconditionally). Nothing queries this instance for DNS resolution; the
+// 3 real answering nameservers are the ones agents/bindmanager_agent.py
+// runs on. See "Multi-server distribution" in INSTALL.md / README.md.
+//
+// Zones are never declared here statically — zone-watcher.sh registers each
+// one dynamically via `rndc addzone` the first time it sees the .zone file
+// atomic_write() produced, which is why `allow-new-zones yes;` is required.
+
+include "/etc/bind/rndc-shared/rndc.key";
+
+controls {
+    inet 0.0.0.0 port 953 allow { any; } keys { "rndc-key"; };
+};
+
+options {
+    directory "/etc/bind/zones-dynamic";
+    pid-file "/var/run/named/named.pid";
+    allow-new-zones yes;
+    recursion no;
+    listen-on { any; };
+    listen-on-v6 { none; };
+    masterfile-format text;
+    notify no;
+};
+
+logging {
+    channel stderr_log { stderr; severity info; print-time yes; };
+    category default { stderr_log; };
+    category general { stderr_log; };
+};

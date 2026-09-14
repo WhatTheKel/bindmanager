@@ -1,0 +1,84 @@
+{% extends "manage/base.html" %}
+{% block title %}Audit Log — Manage{% endblock %}
+{% block sb_audit %}active{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="breadcrumbs">
+  <a href="{% url 'dns_manager:manage_dashboard' %}">Dashboard</a>
+  <span class="sep">›</span>
+  <span class="crumb-current">Audit Log</span>
+</nav>
+{% endblock %}
+
+{% block manage_content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Audit Log</div>
+    <div class="page-subtitle">All DNS changes, zone syncs, and user authentication events</div>
+  </div>
+</div>
+
+<div class="card">
+  {% if page_obj %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Action</th>
+          <th>Entity</th>
+          <th>ID</th>
+          <th>User</th>
+          <th>Detail</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in page_obj %}
+        <tr>
+          <td style="color:var(--text-muted);font-size:.78rem;white-space:nowrap">{{ log.created_at|date:"Y-m-d H:i:s" }}</td>
+          <td>
+            {% if log.action == 'create' %}<span class="badge badge-green">Create</span>
+            {% elif log.action == 'update' %}<span class="badge badge-blue">Update</span>
+            {% elif log.action == 'delete' %}<span class="badge badge-red">Delete</span>
+            {% elif log.action == 'sync' %}<span class="badge badge-amber">Sync</span>
+            {% elif log.action == 'login' %}<span class="badge badge-green">Login</span>
+            {% elif log.action == 'logout' %}<span class="badge badge-neutral">Logout</span>
+            {% elif log.action == 'login_fail' %}<span class="badge badge-red">Login Fail</span>
+            {% else %}<span class="badge badge-neutral">{{ log.action|capfirst }}</span>
+            {% endif %}
+          </td>
+          <td class="monospace">{{ log.entity_type }}</td>
+          <td class="monospace">{{ log.entity_id|default:"—" }}</td>
+          <td>{{ log.user.username|default:"system" }}</td>
+          <td style="color:var(--text-muted);font-size:.82rem;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ log.detail }}">{{ log.detail }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  {% if page_obj.has_other_pages %}
+  <div class="pagination-bar">
+    <span class="text-sm text-muted">
+      {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ page_obj.paginator.count }} entries
+    </span>
+    <div class="flex-row">
+      {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}" class="btn btn-ghost btn-sm">← Prev</a>
+      {% endif %}
+      {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}" class="btn btn-ghost btn-sm">Next →</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div class="empty">
+    <div class="empty-icon">📋</div>
+    <p>No audit entries yet.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

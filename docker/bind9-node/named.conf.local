@@ -1,0 +1,3 @@
+// Managed entirely by bindmanager_agent.py's named_conf_include option —
+// do not declare zones here by hand, they'll be wiped on the next agent run.
+include "/etc/bind/named.bindmanager.conf";

@@ -1,0 +1,893 @@
+{% extends "base.html" %}
+{% block title %}API Reference — BindManager{% endblock %}
+{% block nav_api %}active{% endblock %}
+
+{% block extra_head %}
+<style>
+/* ── API docs layout ─────────────────────────────────────────── */
+.api-wrap {
+  display: flex;
+  align-items: flex-start;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+  gap: 2rem;
+}
+.api-nav {
+  width: 220px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 68px;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+}
+.api-nav-title {
+  font-size: .65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--text-muted);
+  padding: .5rem 0 .25rem;
+  margin-top: .75rem;
+}
+.api-nav-title:first-child { margin-top: 0; }
+.api-nav a {
+  display: block;
+  padding: .3rem 0 .3rem .75rem;
+  font-size: .8rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  border-left: 2px solid var(--border);
+  line-height: 1.4;
+  transition: color .12s, border-color .12s;
+}
+.api-nav a:hover, .api-nav a.active { color: var(--primary); border-left-color: var(--primary); }
+.api-main { flex: 1; min-width: 0; }
+
+/* ── Hero ────────────────────────────────────────────────────── */
+.api-hero {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 14px;
+  padding: 2rem 2rem 1.75rem;
+  color: var(--text);
+  margin-bottom: 2rem;
+  box-shadow: var(--shadow);
+}
+[data-theme="dark"] .api-hero {
+  background: rgba(10, 10, 30, 0.50);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+.api-hero h1 { font-size: 1.6rem; font-weight: 700; margin-bottom: .4rem; }
+.api-hero p  { font-size: .9rem; opacity: .65; margin-bottom: 1.25rem; }
+.api-base-url {
+  display: inline-flex; align-items: center; gap: .6rem;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: .45rem .9rem;
+  font-family: monospace; font-size: .875rem; color: var(--text);
+}
+[data-theme="dark"] .api-base-url {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+/* ── Section ─────────────────────────────────────────────────── */
+.api-section { margin-bottom: 3rem; }
+.api-section-title {
+  font-size: 1.1rem; font-weight: 700;
+  padding-bottom: .5rem;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 1.25rem;
+  display: flex; align-items: center; gap: .6rem;
+}
+.api-section-title svg { opacity: .5; }
+
+/* ── Endpoint card ───────────────────────────────────────────── */
+.ep-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+.ep-header {
+  padding: 1rem 1.25rem .75rem;
+  border-bottom: 1px solid var(--border);
+}
+.ep-title {
+  display: flex; align-items: center; gap: .65rem;
+  margin-bottom: .4rem; flex-wrap: wrap;
+}
+.ep-path {
+  font-size: .9rem; font-weight: 600;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  color: var(--text);
+}
+.ep-desc { font-size: .85rem; color: var(--text-muted); margin: 0; }
+
+/* ── Method badges ───────────────────────────────────────────── */
+.method {
+  display: inline-flex; align-items: center;
+  padding: .22rem .55rem;
+  border-radius: 5px;
+  font-size: .72rem; font-weight: 700;
+  letter-spacing: .04em; font-family: monospace;
+  min-width: 52px; justify-content: center;
+}
+/* Reuses the app's existing badge palette (theme.css) instead of a second
+   copy of the same colors, light + dark variants included. */
+.method.get    { background: var(--success-bg); color: var(--success); }
+.method.post   { background: var(--info-bg);    color: var(--info);    }
+.method.put    { background: var(--warning-bg); color: var(--warning); }
+.method.patch  { background: #ffedd5; color: #c2410c; } /* matches .badge-orange, which has no token */
+[data-theme="dark"] .method.patch { background: #431407; color: #fb923c; }
+.method.delete { background: var(--danger-bg);  color: var(--danger);  }
+
+/* ── Param / response tables ─────────────────────────────────── */
+.ep-body { padding: .85rem 1.25rem; }
+.ep-label {
+  font-size: .68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--text-muted);
+  margin: .9rem 0 .45rem;
+}
+.ep-label:first-child { margin-top: 0; }
+.param-table {
+  width: 100%; border-collapse: collapse;
+  font-size: .82rem; margin-bottom: .25rem;
+}
+.param-table th {
+  text-align: left; padding: .4rem .65rem;
+  font-size: .68rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .05em; color: var(--text-muted);
+  background: var(--surface-2); border-bottom: 1px solid var(--border);
+}
+.param-table td { padding: .45rem .65rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+.param-table tr:last-child td { border-bottom: none; }
+.param-name  { font-family: monospace; font-size: .8rem; font-weight: 600; white-space: nowrap; }
+.param-type  { color: var(--text-muted); font-size: .78rem; white-space: nowrap; }
+.param-req   { color: var(--danger); font-size: .7rem; font-weight: 600; white-space: nowrap; }
+.param-opt   { color: var(--text-muted); font-size: .7rem; white-space: nowrap; }
+
+/* ── Code blocks ─────────────────────────────────────────────── */
+.code-wrap { position: relative; }
+.code-block {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: .85rem 1rem;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: .78rem;
+  line-height: 1.6;
+  overflow-x: auto;
+  white-space: pre;
+  color: var(--text);
+  margin: 0;
+}
+.copy-btn {
+  position: absolute; top: .45rem; right: .5rem;
+  padding: .2rem .55rem; font-size: .72rem; font-weight: 600;
+  border: 1px solid var(--border); border-radius: 5px;
+  background: var(--surface); color: var(--text-muted);
+  cursor: pointer; transition: background .12s, color .12s;
+  font-family: inherit;
+}
+.copy-btn:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+/* ── Auth box ────────────────────────────────────────────────── */
+.auth-pill {
+  display: inline-flex; align-items: center; gap: .4rem;
+  background: var(--info-bg); color: var(--info);
+  border-radius: 6px; padding: .25rem .6rem;
+  font-size: .78rem; font-weight: 600;
+}
+
+/* ── Scrollspy highlight ─────────────────────────────────────── */
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="api-wrap">
+
+  <!-- Left nav -->
+  <nav class="api-nav" id="api-nav">
+    <div class="api-nav-title">Getting Started</div>
+    <a href="#overview">Overview</a>
+    <a href="#auth-section">Authentication</a>
+    <a href="#pagination">Pagination</a>
+
+    <div class="api-nav-title">Resources</div>
+    <a href="#zones">Zones</a>
+    <a href="#records">Records</a>
+    <a href="#nameservers">Nameservers</a>
+    <a href="#audit">Audit Log</a>
+  </nav>
+
+  <!-- Main content -->
+  <div class="api-main">
+
+    <!-- Hero -->
+    <div class="api-hero">
+      <h1>API Reference</h1>
+      <p>Full REST API for managing DNS zones, records and nameservers. Supports JWT and session authentication.</p>
+      <div class="api-base-url">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+        </svg>
+        {{ base_url }}
+      </div>
+    </div>
+
+    <!-- ── Overview ──────────────────────────────────────────── -->
+    <div class="api-section" id="overview">
+      <div class="api-section-title">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        Overview
+      </div>
+
+      <div class="ep-card">
+        <div class="ep-body">
+          <div class="ep-label">Base URLs</div>
+          <table class="param-table">
+            <thead><tr><th>Resource</th><th>Base URL</th></tr></thead>
+            <tbody>
+              <tr><td>Zones</td><td><code>/api/v1/zones/</code></td></tr>
+              <tr><td>Records</td><td><code>/api/v1/records/</code></td></tr>
+              <tr><td>Nameservers</td><td><code>/api/v1/nameservers/</code></td></tr>
+              <tr><td>Audit Log</td><td><code>/api/v1/audit/</code></td></tr>
+              <tr><td>Token (JWT)</td><td><code>/api/token/</code></td></tr>
+            </tbody>
+          </table>
+
+          <div class="ep-label">Request Headers</div>
+          <table class="param-table">
+            <thead><tr><th>Header</th><th>Value</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td class="param-name">Authorization</td><td><code>Bearer &lt;access_token&gt;</code></td><td>JWT authentication</td></tr>
+              <tr><td class="param-name">Content-Type</td><td><code>application/json</code></td><td>Required for POST / PUT / PATCH</td></tr>
+              <tr><td class="param-name">Accept</td><td><code>application/json</code></td><td>Ensures JSON responses</td></tr>
+            </tbody>
+          </table>
+
+          <div class="ep-label">Response Envelope (paginated lists)</div>
+          <div class="code-wrap">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre class="code-block">{
+  "count":    150,
+  "next":     "http://host/api/v1/zones/?page=2",
+  "previous": null,
+  "results":  [ ... ]
+}</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Authentication ────────────────────────────────────── -->
+    <div class="api-section" id="auth-section">
+      <div class="api-section-title">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+        Authentication
+      </div>
+
+      <!-- Obtain token -->
+      <div class="ep-card" id="auth-token">
+        <div class="ep-header">
+          <div class="ep-title">
+            <span class="method post">POST</span>
+            <code class="ep-path">/api/token/</code>
+          </div>
+          <p class="ep-desc">Obtain a JWT access token and refresh token using username and password.</p>
+        </div>
+        <div class="ep-body">
+          <div class="ep-label">Request Body</div>
+          <table class="param-table">
+            <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td class="param-name">username</td><td class="param-type">string</td><td class="param-req">required</td><td>Django username</td></tr>
+              <tr><td class="param-name">password</td><td class="param-type">string</td><td class="param-req">required</td><td>Django password</td></tr>
+            </tbody>
+          </table>
+          <div class="ep-label">Example</div>
+          <div class="code-wrap">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre class="code-block">curl -X POST /api/token/ \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "secret"}'
+
+# Response 200
+{
+  "access":  "eyJhbGci...",
+  "refresh": "eyJhbGci..."
+}</pre>
+          </div>
+          <div class="ep-label" style="margin-top:.9rem">Usage</div>
+          <div class="code-wrap">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre class="code-block">curl /api/v1/zones/ \
+  -H "Authorization: Bearer eyJhbGci..."</pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Refresh token -->
+      <div class="ep-card" id="auth-refresh">
+        <div class="ep-header">
+          <div class="ep-title">
+            <span class="method post">POST</span>
+            <code class="ep-path">/api/token/refresh/</code>
+          </div>
+          <p class="ep-desc">Obtain a new access token using an existing refresh token.</p>
+        </div>
+        <div class="ep-body">
+          <div class="ep-label">Request Body</div>
+          <table class="param-table">
+            <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td class="param-name">refresh</td><td class="param-type">string</td><td class="param-req">required</td><td>Refresh token from /api/token/</td></tr>
+            </tbody>
+          </table>
+          <div class="ep-label">Example Response</div>
+          <div class="code-wrap">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre class="code-block">{ "access": "eyJhbGci..." }</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Pagination ─────────────────────────────────────────── -->
+    <div class="api-section" id="pagination">
+      <div class="api-section-title">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+          <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+        </svg>
+        Pagination &amp; Filtering
+      </div>
+      <div class="ep-card">
+        <div class="ep-body">
+          <div class="ep-label">Pagination</div>
+          <table class="param-table">
+            <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td class="param-name">page</td><td class="param-type">integer</td><td>1</td><td>Page number</td></tr>
+              <tr><td class="param-name">page_size</td><td class="param-type">integer</td><td>50</td><td>Results per page (max 100)</td></tr>
+            </tbody>
+          </table>
+          <div class="ep-label">Common Filters</div>
+          <table class="param-table">
+            <thead><tr><th>Parameter</th><th>Applies to</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td class="param-name">search</td><td>zones, records, nameservers</td><td>Case-insensitive substring match on name / value / address</td></tr>
+              <tr><td class="param-name">ordering</td><td>all lists</td><td>Field name to sort by. Prefix with <code>-</code> for descending, e.g. <code>-updated_at</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Zones ──────────────────────────────────────────────── -->
+    <div class="api-section" id="zones">
+      <div class="api-section-title">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+        </svg>
+        Zones
+      </div>
+
+      <!-- List -->
+      <div class="ep-card" id="zones-list">
+        <div class="ep-header">
+          <div class="ep-title">
+            <span class="method get">GET</span>
+            <code class="ep-path">/api/v1/zones/</code>
+          </div>
+          <p class="ep-desc">List all zones. Returns a lightweight summary with record and nameserver counts — nested records are not included for performance.</p>
+        </div>
+        <div class="ep-body">
+          <div class="ep-label">Query Parameters</div>
+          <table class="param-table">
+            <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td class="param-name">zone_type</td><td class="param-type">string</td><td><code>forward</code> or <code>reverse</code></td></tr>
+              <tr><td class="param-name">is_dirty</td><td class="param-type">boolean</td><td><code>true</code> — zones awaiting BIND sync</td></tr>
+              <tr><td class="param-name">search</td><td class="param-type">string</td><td>Filter by zone name substring</td></tr>
+              <tr><td class="param-name">ordering</td><td class="param-type">string</td><td><code>name</code>, <code>zone_type</code>, <code>updated_at</code>, <code>serial</code></td></tr>
+            </tbody>
+          </table>
+          <div class="ep-label">Response</div>
+          <div class="code-wrap">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre class="code-block">{
+  "count": 3,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id":           1,
+      "name":         "example.com",
+      "zone_type":    "forward",
+      "ip_version":   4,
+      "serial":       2026070101,
+      "is_dirty":     false,
+      "record_count": 12,
+      "ns_count":     2,
+      "updated_at":   "2026-07-01T08:00:00Z"
+    }
+  ]
+}</pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Create -->
+      <div class="ep-card" id="zones-create">
+        <div class="ep-header">
+          <div class="ep-title">
+            <span class="method post">POST</span>
+            <code class="ep-path">/api/v1/zones/</code>
+          </div>
+          <p class="ep-desc">Create a new zone. Assign nameservers via <code>nameserver_ids</code>.</p>
+        </div>
+        <div class="ep-body">
+          <div class="ep-label">Request Body</div>
+          <table class="param-table">
+            <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td class="param-name">name</td><td class="param-type">string</td><td class="param-req">required</td><td>Fully-qualified domain name, e.g. <code>example.com</code></td></tr>
+              <tr><td class="param-name">zone_type</td><td class="param-type">string</td><td class="param-req">required</td><td><code>forward</code> or <code>reverse</code></td></tr>
+              <tr><td class="param-name">ip_version</td><td class="param-type">integer</td><td class="param-opt">optional</td><td><code>4</code> or <code>6</code> (default <code>4</code>)</td></tr>
+              <tr><td class="param-name">refresh</td><td class="param-type">integer</td><td class="param-opt">optional</td><td>SOA refresh interval in seconds</td></tr>
+              <tr><td class="param-name">retry</td><td class="param-type">integer</td><td class="param-opt">optional</td><td>SOA retry interval in seconds</td></tr>
+              <tr><td class="param-name">expire</td><td class="param-type">integer</td><td class="param-opt">optional</td><td>SOA expire time in seconds</td></tr>
+              <tr><td class="param-name">minimum_ttl</td><td class="param-type">integer</td><td class="param-opt">optional</td><td>SOA minimum TTL</td></tr>
+              <tr><td class="param-name">default_ttl</td><td class="param-type">integer</td><td class="param-opt">optional</td><td>Default record TTL</td></tr>
+              <tr><td class="param-name">nameserver_ids</td><td class="param-type">integer[]</td><td class="param-opt">optional</td><td>List of nameserver IDs to assign</td></tr>
+            </tbody>
+          </table>
+          <div class="ep-label">Example</div>
+          <div class="code-wrap">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre class="code-block">curl -X POST /api/v1/zones/ \
+  -H "Authorization: Bearer &lt;token&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "example.com",
+    "zone_type": "forward",
+    "ip_version": 4,
+    "nameserver_ids": [1, 2]
+  }'</pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Retrieve -->
+      <div class="ep-card" id="zones-detail">
+        <div class="ep-header">
+          <div class="ep-title">
+            <span class="method get">GET</span>
+            <code class="ep-path">/api/v1/zones/{id}/</code>
+          </div>
+          <p class="ep-desc">Get full zone details including all nested records and nameservers.</p>
+        </div>
+        <div class="ep-body">
+          <div class="ep-label">Response</div>
+          <div class="code-wrap">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre class="code-block">{
+  "id":          1,
+  "name":        "example.com",
+  "zone_type":   "forward",
+  "ip_version":  4,
+  "serial":      2026070101,
+  "refresh":     3600,
+  "retry":       900,
+  "expire":      604800,
+  "minimum_ttl": 86400,
+  "default_ttl": 3600,
+  "is_dirty":    false,
+  "nameservers": [
+    { "id": 1, "name": "ns1.example.com", "address": "10.0.0.1", "config_dir": "/etc/bind/zones", "is_active": true }
+  ],
+  "records": [
+    { "id": 5, "zone": 1, "zone_name": "example.com", "name": "www", "record_type": "A",
+      "ttl": 3600, "value": "10.0.0.10", "priority": null, "is_active": true, "created_at": "2026-07-01T08:00:00Z" }
+  ],
+  "created_at":  "2026-07-01T08:00:00Z",
+  "updated_at":  "2026-07-01T08:00:00Z"
+}</pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Update -->
+      <div class="ep-card" id="zones-update">
+        <div class="ep-header">
+          <div class="ep-title">
+            <span class="method patch">PATCH</span>
+            <code class="ep-path">/api/v1/zones/{id}/</code>
+            &nbsp;<span class="method put" style="font-size:.65rem">PUT</span>
+          </div>
+          <p class="ep-desc">Partially or fully update a zone. Pass <code>nameserver_ids</code> to replace the assigned nameservers.</p>
+        </div>
+        <div class="ep-body">
+          <div class="ep-label">Example — change nameservers</div>
+          <div class="code-wrap">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre class="code-block">curl -X PATCH /api/v1/zones/1/ \
+  -H "Authorization: Bearer &lt;token&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{"nameserver_ids": [1, 3]}'</pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Delete -->
+      <div class="ep-card" id="zones-delete">
+        <div class="ep-header">
+          <div class="ep-title">
+            <span class="method delete">DELETE</span>
+            <code class="ep-path">/api/v1/zones/{id}/</code>
+          </div>
+          <p class="ep-desc">Delete a zone and all its records. Returns <code>204 No Content</code>.</p>
+        </div>
+      </div>
+
+      <!-- Zone records action -->
+      <div class="ep-card" id="zones-records">
+        <div class="ep-header">
+          <div class="ep-title">
+            <span class="method get">GET</span>
+            <code class="ep-path">/api/v1/zones/{id}/records/</code>
+          </div>
+          <p class="ep-desc">List all records belonging to a specific zone. Supports search and type filtering without fetching the full zone object.</p>
+        </div>
+        <div class="ep-body">
+          <div class="ep-label">Query Parameters</div>
+          <table class="param-table">
+            <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td class="param-name">record_type</td><td class="param-type">string</td><td>Filter by DNS type, e.g. <code>A</code>, <code>MX</code>, <code>CNAME</code></td></tr>
+              <tr><td class="param-name">search</td><td class="param-type">string</td><td>Substring match on name or value</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Records ────────────────────────────────────────────── -->
+    <div class="api-section" id="records">
+      <div class="api-section-title">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+        Records
+      </div>
+
+      <!-- List -->
+      <div class="ep-card" id="records-list">
+        <div class="ep-header">
+          <div class="ep-title">
+            <span class="method get">GET</span>
+            <code class="ep-path">/api/v1/records/</code>
+          </div>
+          <p class="ep-desc">List all DNS records across all zones. Use <code>zone</code> to scope to a specific zone.</p>
+        </div>
+        <div class="ep-body">
+          <div class="ep-label">Query Parameters</div>
+          <table class="param-table">
+            <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td class="param-name">zone</td><td class="param-type">integer</td><td>Filter by zone ID</td></tr>
+              <tr><td class="param-name">record_type</td><td class="param-type">string</td><td>Filter by type: <code>A</code>, <code>AAAA</code>, <code>CNAME</code>, <code>MX</code>, <code>TXT</code>, <code>NS</code>, <code>PTR</code>, <code>SRV</code>, <code>CAA</code>…</td></tr>
+              <tr><td class="param-name">is_active</td><td class="param-type">boolean</td><td><code>true</code> / <code>false</code></td></tr>
+              <tr><td class="param-name">search</td><td class="param-type">string</td><td>Substring match on name or value</td></tr>
+              <tr><td class="param-name">ordering</td><td class="param-type">string</td><td><code>name</code>, <code>record_type</code>, <code>zone__name</code>, <code>ttl</code></td></tr>
+            </tbody>
+          </table>
+          <div class="ep-label">Record Object</div>
+          <div class="code-wrap">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre class="code-block">{
+  "id":          5,
+  "zone":        1,
+  "zone_name":   "example.com",
+  "name":        "www",
+  "record_type": "A",
+  "ttl":         3600,
+  "value":       "10.0.0.10",
+  "priority":    null,
+  "is_active":   true,
+  "created_at":  "2026-07-01T08:00:00Z"
+}</pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Create -->
+      <div class="ep-card" id="records-create">
+        <div class="ep-header">
+          <div class="ep-title">
+            <span class="method post">POST</span>
+            <code class="ep-path">/api/v1/records/</code>
+          </div>
+          <p class="ep-desc">Create a DNS record. The parent zone is marked dirty and queued for BIND sync.</p>
+        </div>
+        <div class="ep-body">
+          <div class="ep-label">Request Body</div>
+          <table class="param-table">
+            <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td class="param-name">zone</td><td class="param-type">integer</td><td class="param-req">required</td><td>Zone ID</td></tr>
+              <tr><td class="param-name">name</td><td class="param-type">string</td><td class="param-req">required</td><td>Record label. Use <code>@</code> for the zone apex</td></tr>
+              <tr><td class="param-name">record_type</td><td class="param-type">string</td><td class="param-req">required</td><td><code>A</code>, <code>AAAA</code>, <code>CNAME</code>, <code>MX</code>, <code>TXT</code>, <code>NS</code>, <code>PTR</code>, <code>SRV</code>, <code>CAA</code>…</td></tr>
+              <tr><td class="param-name">value</td><td class="param-type">string</td><td class="param-req">required</td><td>Record data (IP, hostname, TXT string, etc.)</td></tr>
+              <tr><td class="param-name">ttl</td><td class="param-type">integer</td><td class="param-opt">optional</td><td>TTL in seconds. Omit to inherit the zone default</td></tr>
+              <tr><td class="param-name">priority</td><td class="param-type">integer</td><td class="param-opt">optional</td><td>Required for MX and SRV records</td></tr>
+              <tr><td class="param-name">is_active</td><td class="param-type">boolean</td><td class="param-opt">optional</td><td>Include in zone file (default <code>true</code>)</td></tr>
+            </tbody>
+          </table>
+          <div class="ep-label">Example — add an A record</div>
+          <div class="code-wrap">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre class="code-block">curl -X POST /api/v1/records/ \
+  -H "Authorization: Bearer &lt;token&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "zone": 1,
+    "name": "www",
+    "record_type": "A",
+    "value": "10.0.0.10",
+    "ttl": 3600
+  }'</pre>
+          </div>
+          <div class="ep-label" style="margin-top:.9rem">Example — add an MX record</div>
+          <div class="code-wrap">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre class="code-block">curl -X POST /api/v1/records/ \
+  -H "Authorization: Bearer &lt;token&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "zone": 1,
+    "name": "@",
+    "record_type": "MX",
+    "value": "mail.example.com.",
+    "priority": 10
+  }'</pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Retrieve / Update / Delete -->
+      <div class="ep-card" id="records-crud">
+        <div class="ep-header">
+          <div class="ep-title">
+            <span class="method get">GET</span>
+            <span class="method patch">PATCH</span>
+            <span class="method put">PUT</span>
+            <span class="method delete">DELETE</span>
+            <code class="ep-path">/api/v1/records/{id}/</code>
+          </div>
+          <p class="ep-desc">Retrieve, update, or delete a single record. PATCH accepts any subset of fields. DELETE returns <code>204 No Content</code>.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Nameservers ────────────────────────────────────────── -->
+    <div class="api-section" id="nameservers">
+      <div class="api-section-title">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="2" width="20" height="8" rx="2"/>
+          <rect x="2" y="14" width="20" height="8" rx="2"/>
+          <line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>
+        </svg>
+        Nameservers
+      </div>
+
+      <div class="ep-card" id="nameservers-list">
+        <div class="ep-header">
+          <div class="ep-title">
+            <span class="method get">GET</span>
+            <code class="ep-path">/api/v1/nameservers/</code>
+          </div>
+          <p class="ep-desc">List all configured nameservers.</p>
+        </div>
+        <div class="ep-body">
+          <div class="ep-label">Query Parameters</div>
+          <table class="param-table">
+            <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td class="param-name">search</td><td class="param-type">string</td><td>Substring match on name or IP address</td></tr>
+              <tr><td class="param-name">ordering</td><td class="param-type">string</td><td><code>name</code>, <code>address</code>, <code>is_active</code></td></tr>
+            </tbody>
+          </table>
+          <div class="ep-label">Nameserver Object</div>
+          <div class="code-wrap">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre class="code-block">{
+  "id":         1,
+  "name":       "ns1.example.com",
+  "address":    "10.0.0.1",
+  "config_dir": "/etc/bind/zones",
+  "is_active":  true
+}</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="ep-card" id="nameservers-create">
+        <div class="ep-header">
+          <div class="ep-title">
+            <span class="method post">POST</span>
+            <code class="ep-path">/api/v1/nameservers/</code>
+          </div>
+          <p class="ep-desc">Register a nameserver. The <code>config_dir</code> is the path on the server where zone files are written.</p>
+        </div>
+        <div class="ep-body">
+          <div class="ep-label">Request Body</div>
+          <table class="param-table">
+            <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td class="param-name">name</td><td class="param-type">string</td><td class="param-req">required</td><td>FQDN of the nameserver, e.g. <code>ns1.example.com</code></td></tr>
+              <tr><td class="param-name">address</td><td class="param-type">string</td><td class="param-req">required</td><td>IP address</td></tr>
+              <tr><td class="param-name">config_dir</td><td class="param-type">string</td><td class="param-req">required</td><td>Zone file directory on the nameserver</td></tr>
+              <tr><td class="param-name">is_active</td><td class="param-type">boolean</td><td class="param-opt">optional</td><td>Default <code>true</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="ep-card">
+        <div class="ep-header">
+          <div class="ep-title">
+            <span class="method get">GET</span>
+            <span class="method patch">PATCH</span>
+            <span class="method put">PUT</span>
+            <span class="method delete">DELETE</span>
+            <code class="ep-path">/api/v1/nameservers/{id}/</code>
+          </div>
+          <p class="ep-desc">Retrieve, update, or delete a single nameserver. DELETE returns <code>204 No Content</code>.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Audit Log ──────────────────────────────────────────── -->
+    <div class="api-section" id="audit">
+      <div class="api-section-title">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+          <polyline points="10 9 9 9 8 9"/>
+        </svg>
+        Audit Log
+      </div>
+
+      <div class="ep-card" id="audit-list">
+        <div class="ep-header">
+          <div class="ep-title">
+            <span class="method get">GET</span>
+            <code class="ep-path">/api/v1/audit/</code>
+            &nbsp;<span class="auth-pill">Read-only</span>
+          </div>
+          <p class="ep-desc">List audit log entries. Covers zone/record/nameserver changes, zone syncs, and user login events.</p>
+        </div>
+        <div class="ep-body">
+          <div class="ep-label">Query Parameters</div>
+          <table class="param-table">
+            <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td class="param-name">entity_type</td><td class="param-type">string</td><td><code>zone</code>, <code>record</code>, <code>nameserver</code>, <code>user</code></td></tr>
+              <tr><td class="param-name">action</td><td class="param-type">string</td><td><code>create</code>, <code>update</code>, <code>delete</code>, <code>sync</code>, <code>login</code>, <code>logout</code>, <code>login_fail</code></td></tr>
+              <tr><td class="param-name">search</td><td class="param-type">string</td><td>Search in entity_type or detail text</td></tr>
+              <tr><td class="param-name">ordering</td><td class="param-type">string</td><td><code>created_at</code> or <code>-created_at</code></td></tr>
+            </tbody>
+          </table>
+          <div class="ep-label">Audit Entry Object</div>
+          <div class="code-wrap">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre class="code-block">{
+  "id":          42,
+  "action":      "create",
+  "entity_type": "record",
+  "entity_id":   5,
+  "detail":      "Added A \"www\" to example.com",
+  "username":    "admin",
+  "created_at":  "2026-07-01T08:00:00Z"
+}</pre>
+          </div>
+          <div class="ep-label" style="margin-top:.9rem">Example — recent login failures</div>
+          <div class="code-wrap">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre class="code-block">curl "/api/v1/audit/?action=login_fail&ordering=-created_at" \
+  -H "Authorization: Bearer &lt;token&gt;"</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="ep-card">
+        <div class="ep-header">
+          <div class="ep-title">
+            <span class="method get">GET</span>
+            <code class="ep-path">/api/v1/audit/{id}/</code>
+          </div>
+          <p class="ep-desc">Retrieve a single audit log entry.</p>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end .api-main -->
+</div><!-- end .api-wrap -->
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/* Copy-to-clipboard for code blocks.
+   navigator.clipboard requires a secure context (HTTPS, or localhost/
+   127.0.0.1) — this app runs plain HTTP by default (see README "Security"),
+   so on any real deployment host that API is simply undefined. Fall back
+   to the older execCommand('copy') path, which still works over HTTP. */
+function copyCode(btn) {
+  var pre = btn.nextElementSibling;
+  var text = pre.textContent;
+
+  function flash(label) {
+    var orig = btn.textContent;
+    btn.textContent = label;
+    setTimeout(function () { btn.textContent = orig; }, 1800);
+  }
+
+  function legacyCopy() {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    flash(ok ? 'Copied!' : 'Copy failed');
+  }
+
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(function () {
+      flash('Copied!');
+    }, legacyCopy);
+  } else {
+    legacyCopy();
+  }
+}
+
+/* Scrollspy — highlight active nav link */
+(function () {
+  var sections = document.querySelectorAll('.api-section[id]');
+  var links    = document.querySelectorAll('#api-nav a');
+  var obs = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        var id = entry.target.id;
+        links.forEach(function (a) {
+          a.classList.toggle('active', a.getAttribute('href') === '#' + id);
+        });
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  sections.forEach(function (s) { obs.observe(s); });
+})();
+</script>
+{% endblock %}

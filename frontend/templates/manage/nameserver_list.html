@@ -1,0 +1,72 @@
+{% extends "manage/base.html" %}
+{% block title %}Nameservers — Manage{% endblock %}
+{% block sb_nameservers %}active{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="breadcrumbs">
+  <a href="{% url 'dns_manager:manage_dashboard' %}">Dashboard</a>
+  <span class="sep">›</span>
+  <span class="crumb-current">Nameservers</span>
+</nav>
+{% endblock %}
+
+{% block manage_content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Nameservers</div>
+    <div class="page-subtitle">{{ nameservers|length }} configured</div>
+  </div>
+  <a href="{% url 'dns_manager:manage_nameserver_add' %}" class="btn btn-primary">+ Add Nameserver</a>
+</div>
+
+<div class="card">
+  {% if nameservers %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Address</th>
+          <th>Config Dir</th>
+          <th>Agent API Key</th>
+          <th>Status</th>
+          <th>Zones</th>
+          <th style="text-align:right">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ns in nameservers %}
+        <tr>
+          <td class="monospace" style="font-weight:600">{{ ns.name }}</td>
+          <td class="monospace">{{ ns.address }}</td>
+          <td class="monospace" style="color:var(--text-muted)">{{ ns.config_dir }}</td>
+          <td class="monospace text-sm" style="color:var(--text-muted)" title="Used by the pull agent script's Authorization: ApiKey header">{{ ns.api_key }}</td>
+          <td>
+            {% if ns.is_active %}
+              <span class="badge badge-green"><span class="dot dot-green"></span>Active</span>
+            {% else %}
+              <span class="badge badge-neutral">Inactive</span>
+            {% endif %}
+          </td>
+          <td>{{ ns.zones.all|length }}</td>
+          <td style="white-space:nowrap;text-align:right">
+            <a href="{% url 'dns_manager:manage_nameserver_edit' ns.pk %}"
+               class="btn btn-ghost btn-xs">Edit</a>
+            <a href="{% url 'dns_manager:manage_nameserver_delete' ns.pk %}"
+               class="btn btn-ghost btn-xs text-danger"
+               data-delete-url="{% url 'dns_manager:manage_nameserver_delete' ns.pk %}"
+               data-delete-label="Delete nameserver &quot;{{ ns.name }}&quot;? This cannot be undone.">Delete</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty">
+    <div class="empty-icon">🖥️</div>
+    <p>No nameservers yet. <a href="{% url 'dns_manager:manage_nameserver_add' %}">Add the first one</a>.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

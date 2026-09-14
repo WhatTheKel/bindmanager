@@ -1,0 +1,25 @@
+$ORIGIN {{ zone.name }}.
+$TTL {{ zone.default_ttl }}
+
+; SOA Record
+@   IN  SOA {{ zone.primary_ns }} hostmaster.{{ zone.name }}. (
+            {{ serial }}           ; Serial
+            {{ zone.refresh }}     ; Refresh
+            {{ zone.retry }}       ; Retry
+            {{ zone.expire }}      ; Expire
+            {{ zone.minimum_ttl }} ; Minimum TTL
+        )
+
+; NS Records
+{% for ns_name in zone.nameservers %}
+@   IN  NS  {{ ns_name }}.
+{% endfor %}
+
+; Zone Records
+{% for record in records %}
+{% if record.record_type in ('MX', 'SRV') %}
+{{ record.name }}{% if record.ttl %}  {{ record.ttl }}{% endif %}  IN  {{ record.record_type }}  {{ record.priority }}  {{ record.value }}
+{% else %}
+{{ record.name }}{% if record.ttl %}  {{ record.ttl }}{% endif %}  IN  {{ record.record_type }}  {{ record.value }}
+{% endif %}
+{% endfor %}

@@ -1,0 +1,133 @@
+{% extends "manage/base.html" %}
+{% block title %}Users — Manage{% endblock %}
+{% block sb_users %}active{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="breadcrumbs">
+  <a href="{% url 'dns_manager:manage_dashboard' %}">Dashboard</a>
+  <span class="sep">›</span>
+  <span class="crumb-current">Users</span>
+</nav>
+{% endblock %}
+
+{% block manage_content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Users</div>
+    <div class="page-subtitle">{{ page_obj.paginator.count }} account{{ page_obj.paginator.count|pluralize }}</div>
+  </div>
+  <a href="{% url 'dns_manager:manage_user_add' %}" class="btn btn-primary">+ Add User</a>
+</div>
+
+<!-- Search -->
+<form method="get" class="flex-row mb-1" style="max-width:420px">
+  <input type="search" name="q" value="{{ q }}" placeholder="Search by username, email, or name…"
+         class="form-input flex-1">
+  <button type="submit" class="btn btn-ghost">Search</button>
+  {% if q %}<a href="{% url 'dns_manager:manage_user_list' %}" class="btn btn-ghost">Clear</a>{% endif %}
+</form>
+
+<div class="card">
+  {% if page_obj %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Username</th>
+          <th>Name / Email</th>
+          <th>Auth</th>
+          <th>Role</th>
+          <th>Status</th>
+          <th>Last Login</th>
+          <th style="text-align:right">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in page_obj %}
+        <tr>
+          <td style="font-weight:600;white-space:nowrap">
+            {{ u.username }}
+            {% if u == request.user %}
+              <span class="badge badge-blue" style="font-size:.65rem;vertical-align:middle">you</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if u.get_full_name %}<div style="font-size:.875rem">{{ u.get_full_name }}</div>{% endif %}
+            <div style="font-size:.78rem;color:var(--text-muted)">{{ u.email|default:"—" }}</div>
+          </td>
+          <td style="white-space:nowrap">
+            {% with providers=u.social_auth.all %}
+            {% if not providers %}
+              <span class="badge badge-neutral">Local</span>
+            {% else %}
+              {% for sa in providers %}
+                {% if sa.provider == 'authentik' %}
+                  <span class="badge badge-blue">Authentik</span>
+                {% elif sa.provider == 'okta-openidconnect' %}
+                  <span class="badge badge-blue">Okta</span>
+                {% else %}
+                  <span class="badge badge-blue">{{ sa.provider }}</span>
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+            {% endwith %}
+          </td>
+          <td>
+            {% if u.is_superuser %}
+              <span class="badge badge-amber">Superuser</span>
+            {% elif u.is_staff %}
+              <span class="badge badge-blue">Staff</span>
+            {% else %}
+              <span class="badge badge-neutral">User</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if u.is_active %}
+              <span class="badge badge-green"><span class="dot dot-green"></span>Active</span>
+            {% else %}
+              <span class="badge badge-red">Inactive</span>
+            {% endif %}
+          </td>
+          <td style="color:var(--text-muted);font-size:.8rem;white-space:nowrap">
+            {{ u.last_login|date:"Y-m-d H:i"|default:"Never" }}
+          </td>
+          <td style="white-space:nowrap;text-align:right">
+            <a href="{% url 'dns_manager:manage_user_edit' u.pk %}"
+               class="btn btn-ghost btn-xs">Edit</a>
+            {% if u != request.user and not u.is_superuser %}
+            <a href="{% url 'dns_manager:manage_user_delete' u.pk %}"
+               class="btn btn-ghost btn-xs text-danger">Delete</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if page_obj.has_other_pages %}
+  <div class="pagination-bar">
+    <span class="text-sm text-muted">
+      {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ page_obj.paginator.count }} users
+    </span>
+    <div class="flex-row">
+      {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}{% if q %}&q={{ q }}{% endif %}"
+           class="btn btn-ghost btn-sm">← Prev</a>
+      {% endif %}
+      {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}{% if q %}&q={{ q }}{% endif %}"
+           class="btn btn-ghost btn-sm">Next →</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div class="empty">
+    <div class="empty-icon">👤</div>
+    <p>No users found{% if q %} matching "<strong>{{ q }}</strong>"{% endif %}.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

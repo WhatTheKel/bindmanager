@@ -1,0 +1,130 @@
+{% extends "manage/base.html" %}
+{% load dns_tags %}
+{% block title %}Zones — Manage{% endblock %}
+{% block sb_zones %}active{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="breadcrumbs">
+  <a href="{% url 'dns_manager:manage_dashboard' %}">Dashboard</a>
+  <span class="sep">›</span>
+  <span class="crumb-current">Zones</span>
+</nav>
+{% endblock %}
+
+{% block manage_content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Zones</div>
+    <div class="page-subtitle">{{ page_obj.paginator.count }} zone{{ page_obj.paginator.count|pluralize }}</div>
+  </div>
+  <a href="{% url 'dns_manager:manage_zone_add' %}" class="btn btn-primary">+ Add Zone</a>
+</div>
+
+<!-- Filters bar -->
+<div class="filter-bar">
+
+  <!-- Type tabs -->
+  <div class="tab-group">
+    <a href="?{% url_replace zt=None page=None %}"
+       class="tab-btn {% if not zt %}active{% endif %}">All</a>
+    <a href="?{% url_replace zt='forward' page=None %}"
+       class="tab-btn {% if zt == 'forward' %}active{% endif %}">Forward</a>
+    <a href="?{% url_replace zt='reverse' page=None %}"
+       class="tab-btn {% if zt == 'reverse' %}active{% endif %}">Reverse / PTR</a>
+  </div>
+
+  <!-- Search -->
+  <form method="get" class="flex-row flex-1" style="min-width:200px">
+    {% if zt %}<input type="hidden" name="zt" value="{{ zt }}">{% endif %}
+    <input type="search" name="q" value="{{ q }}" placeholder="Search zones…"
+           class="form-input flex-1" data-live-search autofocus>
+    {% if q %}<a href="?{% url_replace q=None page=None %}" class="btn btn-ghost">✕</a>{% endif %}
+  </form>
+
+</div>
+
+<div class="card">
+  {% if page_obj %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Zone Name</th>
+          <th>Type</th>
+          <th>Records</th>
+          <th>NS</th>
+          <th>Status</th>
+          <th style="text-align:right">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for zone in page_obj %}
+        <tr>
+          <td>
+            <a href="{% url 'dns_manager:manage_zone_detail' zone.pk %}" style="font-weight:600;font-family:monospace">{{ zone.name }}</a>
+          </td>
+          <td>
+            {% if zone.zone_type == 'forward' %}
+              <span class="badge badge-blue">Forward</span>
+            {% else %}
+              <span class="badge badge-purple">Reverse</span>
+            {% endif %}
+          </td>
+          <td>{{ zone.record_count }}</td>
+          <td>{{ zone.ns_count }}</td>
+          <td>
+            {% if zone.is_dirty %}
+              <span class="badge badge-amber"><span class="dot dot-red"></span>Pending</span>
+            {% else %}
+              <span class="badge badge-green"><span class="dot dot-green"></span>Synced</span>
+            {% endif %}
+          </td>
+          <td style="white-space:nowrap;text-align:right">
+            <a href="{% url 'dns_manager:manage_record_add' zone.pk %}"
+               class="btn btn-primary btn-xs"
+               title="Add a record to this zone">+ Record</a>
+            <a href="{% url 'dns_manager:manage_zone_edit' zone.pk %}"
+               class="btn btn-ghost btn-xs">Edit</a>
+            <a href="{% url 'dns_manager:manage_zone_delete' zone.pk %}"
+               class="btn btn-ghost btn-xs text-danger"
+               data-delete-url="{% url 'dns_manager:manage_zone_delete' zone.pk %}"
+               data-delete-label="Delete zone &quot;{{ zone.name }}&quot;? This cannot be undone.">Delete</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  {% if page_obj.has_other_pages %}
+  <div class="pagination-bar">
+    <span class="text-sm text-muted">
+      {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ page_obj.paginator.count }} zones
+    </span>
+    <div class="flex-row">
+      {% if page_obj.has_previous %}
+        <a href="?{% url_replace page=page_obj.previous_page_number %}"
+           class="btn btn-ghost btn-sm">← Prev</a>
+      {% endif %}
+      {% if page_obj.has_next %}
+        <a href="?{% url_replace page=page_obj.next_page_number %}"
+           class="btn btn-ghost btn-sm">Next →</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div class="empty">
+    <div class="empty-icon">🌐</div>
+    {% if q %}
+      <p>No zones matching "<strong>{{ q }}</strong>".
+         <a href="?{% url_replace q=None %}">Clear search</a></p>
+    {% else %}
+      <p>No zones yet. <a href="{% url 'dns_manager:manage_zone_add' %}">Add the first zone</a>.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

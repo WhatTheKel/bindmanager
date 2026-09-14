@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Django
+*.log
+staticfiles/
+db.sqlite3
+
+# Environment
+.env
+.env.local
+.env.*.local
+.env.node
+.env.agent
+
+# Branding — customer-specific assets, not committed to the repo
+branding/logo.*
+branding/favicon.*
+
+# Docker
+.docker/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Zone files — generated at runtime, not source-controlled
+bind_zones/
+
+# Hidden-primary `bind` service state — generated at runtime, includes a
+# runtime-generated rndc secret, never source-controlled
+bind_dynamic/
+bind_rndc/

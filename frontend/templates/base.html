@@ -1,0 +1,141 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ BRANDING_APP_NAME }}{% endblock %}</title>
+  <link rel="icon" href="{% if BRANDING_FAVICON_URL %}{{ BRANDING_FAVICON_URL }}{% else %}{% static 'favicon.ico' %}{% endif %}" type="image/x-icon">
+  <link rel="stylesheet" href="{% static 'css/theme.css' %}">
+  {% block extra_head %}{% endblock %}
+  <script>
+    (function(){
+      try {
+        var t = localStorage.getItem('theme');
+        if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch(_) {}
+    })();
+  </script>
+</head>
+<body>
+
+<div id="progress-bar"></div>
+
+<header class="topbar">
+  <a class="topbar-brand"
+     href="{% if user.is_staff %}{% url 'dns_manager:manage_dashboard' %}{% else %}{% url 'dns_manager:zone_list' %}{% endif %}">
+    <img src="{% if BRANDING_LOGO_URL %}{{ BRANDING_LOGO_URL }}{% else %}{% static 'logo.webp' %}{% endif %}" alt="Logo" style="height:28px;width:auto;vertical-align:middle;margin-right:.5rem">
+    DNS Manager
+  </a>
+
+  <nav class="topbar-nav">
+    {% if user.is_staff %}
+    <a href="{% url 'dns_manager:manage_dashboard' %}"
+       class="nav-link {% block nav_dashboard %}{% endblock %}">Dashboard</a>
+    {% endif %}
+    <a href="{% url 'dns_manager:zone_list' %}"
+       class="nav-link {% block nav_zones %}{% endblock %}">Zones</a>
+    {% if user.is_staff %}
+    <a href="{% url 'dns_manager:manage_zone_list' %}"
+       class="nav-link {% block nav_manage %}{% endblock %}">Manage</a>
+    {% endif %}
+    {% if user.is_superuser %}
+    <a href="/api/v1/" class="nav-link {% block nav_api %}{% endblock %}">API</a>
+    {% endif %}
+  </nav>
+
+  <div class="topbar-right">
+    {% if user.is_authenticated %}
+    <div class="user-menu" id="user-menu">
+      <button type="button" class="user-menu-trigger" id="user-menu-trigger" aria-expanded="false" aria-haspopup="true">
+        <div class="user-avatar">{{ user.username|first|upper }}</div>
+        <span>{{ user.username }}</span>
+        <svg class="user-chevron" viewBox="0 0 24 24" width="13" height="13" fill="none"
+             stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+      <div class="user-menu-dropdown" id="user-menu-dropdown" hidden>
+        <div class="user-menu-header">
+          <strong>{{ user.username }}</strong>
+          {% if user.email %}<span>{{ user.email }}</span>{% endif %}
+          {% if user.is_staff %}<span style="margin-top:.3rem;display:block"><span class="badge badge-blue" style="font-size:.65rem">Staff</span></span>{% endif %}
+        </div>
+        <form method="post" action="{% url 'logout' %}">
+          {% csrf_token %}
+          <button type="submit" class="user-menu-item danger">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+            Sign out
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+    <button id="theme-toggle" aria-label="Toggle theme" title="Toggle light / dark">
+      <svg class="icon-sun" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="5"/>
+        <line x1="12" y1="1"  x2="12" y2="3"/>
+        <line x1="12" y1="21" x2="12" y2="23"/>
+        <line x1="4.22" y1="4.22"  x2="5.64" y2="5.64"/>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+        <line x1="1" y1="12" x2="3"  y2="12"/>
+        <line x1="21" y1="12" x2="23" y2="12"/>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+      </svg>
+      <svg class="icon-moon" viewBox="0 0 24 24">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<main class="page">
+  {% block content %}{% endblock %}
+</main>
+
+<footer class="footer">
+  {{ BRANDING_APP_NAME }} &mdash; BIND DNS Management &bull; {% now "Y" %}{% if user.is_superuser %} &bull;
+  <a href="/api/v1/">REST API</a>{% endif %}
+</footer>
+
+<!-- Toast notifications -->
+{% if messages %}
+<div class="toast-container" id="toast-container">
+  {% for message in messages %}
+  <div class="toast toast-{{ message.tags }}">
+    <span>{{ message }}</span>
+    <button type="button" class="toast-close" title="Dismiss">×</button>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Delete confirm modal -->
+<div id="delete-modal" class="modal-overlay" style="display:none" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+  <div class="modal-box">
+    <div class="modal-icon">🗑</div>
+    <div class="modal-title" id="delete-modal-title">Confirm Delete</div>
+    <p class="modal-body" id="delete-modal-msg"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" id="delete-modal-cancel">Cancel</button>
+      <form id="delete-modal-form" method="post" action="#" style="display:inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Delete</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="{% static 'js/vendor/gsap.min.js' %}"></script>
+<script src="{% static 'js/app.js' %}"></script>
+<script src="{% static 'js/theme.js' %}"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

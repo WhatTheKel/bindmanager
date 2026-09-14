@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Zones — BindManager{% endblock %}
+{% block nav_zones %}active{% endblock %}
+
+{% block content %}
+
+<div class="stats-row">
+  <div class="stat-card">
+    <div class="label">Total Zones</div>
+    <div class="value">{{ page_obj.paginator.count }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Pending Sync</div>
+    <div class="value" {% if dirty_count %}style="color:var(--warning)"{% endif %}>{{ dirty_count }}</div>
+  </div>
+</div>
+
+<div class="page-header">
+  <div>
+    <div class="page-title">DNS Zones</div>
+    <div class="page-subtitle">Forward and reverse zones served by BIND</div>
+  </div>
+</div>
+
+<!-- Filters bar -->
+<div class="filter-bar">
+
+  <!-- Type tabs -->
+  <div class="tab-group">
+    <a href="?{% if q %}q={{ q }}{% endif %}" class="tab-btn {% if not zt %}active{% endif %}">All</a>
+    <a href="?zt=forward{% if q %}&q={{ q }}{% endif %}" class="tab-btn {% if zt == 'forward' %}active{% endif %}">Forward</a>
+    <a href="?zt=reverse{% if q %}&q={{ q }}{% endif %}" class="tab-btn {% if zt == 'reverse' %}active{% endif %}">Reverse / PTR</a>
+  </div>
+
+  <!-- Search -->
+  <form method="get" class="flex-row flex-1" style="min-width:200px">
+    {% if zt %}<input type="hidden" name="zt" value="{{ zt }}">{% endif %}
+    <input type="search" name="q" value="{{ q }}" placeholder="Search zone…" class="form-input flex-1">
+    <button type="submit" class="btn btn-ghost">Search</button>
+    {% if q %}<a href="?{% if zt %}zt={{ zt }}{% endif %}" class="btn btn-ghost">✕</a>{% endif %}
+  </form>
+
+</div>
+
+<div class="card">
+  {% if page_obj %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Zone Name</th>
+          <th>Type</th>
+          <th>IP</th>
+          <th>Serial</th>
+          <th>Records</th>
+          <th>Nameservers</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for zone in page_obj %}
+        <tr>
+          <td>
+            <a href="{% url 'dns_manager:zone_detail' zone.pk %}" style="font-weight:600">
+              {{ zone.name }}
+            </a>
+          </td>
+          <td>
+            {% if zone.zone_type == 'forward' %}
+              <span class="badge badge-blue">Forward</span>
+            {% else %}
+              <span class="badge badge-neutral">Reverse</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if zone.ip_version == 4 %}
+              <span class="badge badge-neutral">IPv4</span>
+            {% else %}
+              <span class="badge badge-blue">IPv6</span>
+            {% endif %}
+          </td>
+          <td class="monospace" style="font-size:.78rem">{{ zone.serial }}</td>
+          <td>{{ zone.record_count }}</td>
+          <td>{{ zone.ns_count }}</td>
+          <td>
+            {% if zone.is_dirty %}
+              <span class="badge badge-amber">
+                <span class="dot dot-red"></span>Pending
+              </span>
+            {% else %}
+              <span class="badge badge-green">
+                <span class="dot dot-green"></span>Synced
+              </span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  {% if page_obj.has_other_pages %}
+  <div class="pagination-bar">
+    <span class="text-sm text-muted">
+      {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ page_obj.paginator.count }} zones
+    </span>
+    <div class="flex-row">
+      {% if page_obj.has_previous %}
+        <a href="?{% if zt %}zt={{ zt }}&{% endif %}{% if q %}q={{ q }}&{% endif %}page={{ page_obj.previous_page_number }}"
+           class="btn btn-ghost btn-sm">← Prev</a>
+      {% endif %}
+      {% if page_obj.has_next %}
+        <a href="?{% if zt %}zt={{ zt }}&{% endif %}{% if q %}q={{ q }}&{% endif %}page={{ page_obj.next_page_number }}"
+           class="btn btn-ghost btn-sm">Next →</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div class="empty">
+    <div class="empty-icon">🌐</div>
+    {% if q %}
+      <p>No zones matching "<strong>{{ q }}</strong>". <a href="?{% if zt %}zt={{ zt }}{% endif %}">Clear search</a></p>
+    {% else %}
+      <p>No zones yet. Create one via the <a href="{% url 'dns_manager:manage_zone_add' %}">management panel</a> or <a href="/api/v1/zones/">API</a>.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

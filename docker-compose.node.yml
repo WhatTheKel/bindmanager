@@ -1,0 +1,32 @@
+# Optional alternative to INSTALL.md's Part 4 (bare-metal agent setup).
+#
+# Deploy THIS file — not docker-compose.yml — on each answering nameserver
+# (ns1/ns2/ns3), instead of installing BIND9 + agents/bindmanager_agent.py
+# on the bare host yourself. Same agent script either way; this just bakes
+# it into the same container as BIND9 for a "docker compose up" deploy.
+#
+# Not a drop-in replacement for a bare-metal BIND install if you're already
+# running one with its own config/other zones — see
+# docker/bind9-node/README.md for the tradeoffs before choosing this over
+# the bare-metal + agent path in INSTALL.md Part 4.
+#
+# Usage (on the nameserver host, not the BindManager app host):
+#   cp .env.node.example .env.node   # fill in BINDMANAGER_API_URL / _API_KEY
+#   docker compose -f docker-compose.node.yml up --build -d
+
+services:
+  bind-node:
+    build: ./docker/bind9-node
+    restart: unless-stopped
+    env_file: .env.node
+    ports:
+      - "53:53/udp"
+      - "53:53/tcp"
+      # DNS over UDP at real query volume is sensitive to Docker's userland
+      # NAT/proxy path and loses the querying resolver's real source IP
+      # unless you also set `network_mode: host` (drop the `ports:` block
+      # above if you do) — fine for evaluation/low-volume use as published
+      # above, worth switching for a production-facing nameserver.
+    volumes:
+      - ./zones:/etc/bind/zones
+      - ./agent-state:/var/lib/bindmanager-agent

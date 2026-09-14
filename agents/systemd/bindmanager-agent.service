@@ -1,0 +1,12 @@
+[Unit]
+Description=BindManager pull agent — sync zones assigned to this nameserver
+After=network-online.target bind9.service named.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/bindmanager-agent/bindmanager_agent.py --config /etc/bindmanager-agent/config.ini
+# BIND config/zone writes + rndc need root (or the bind group + matching
+# file perms on /etc/bind) — adjust to your distro's bind user if you've
+# set up group-writable zone/config directories instead.
+User=root

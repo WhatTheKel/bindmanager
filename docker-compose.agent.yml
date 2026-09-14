@@ -1,0 +1,39 @@
+# Optional alternative to INSTALL.md's Part 4 — for a host that ALREADY
+# has BIND9 installed and running. Deploys ONLY the pull agent in a
+# container; BIND9 itself keeps running on the bare host, untouched beyond
+# the one `include` line and the three bind-mounts below.
+#
+# Contrast with docker-compose.node.yml, which bakes BIND9 *and* the agent
+# into one container together — that one's for a fresh host with no
+# existing BIND9 install. Don't run both on the same host.
+#
+# Usage (on the nameserver host, not the BindManager app host):
+#   cp .env.agent.example .env.agent   # fill in BINDMANAGER_API_URL / _API_KEY
+#   docker compose -f docker-compose.agent.yml up --build -d
+#
+# See docker/bind9-agent/README.md for the tradeoffs and how rndc reaches
+# the host's named from inside the container.
+
+services:
+  bindmanager-agent:
+    build: ./docker/bind9-agent
+    restart: unless-stopped
+    env_file: .env.agent
+    # rndc talks to the host's named on 127.0.0.1:953 by default — the
+    # container needs the host's network namespace to reach it, rather
+    # than requiring a controls{} block opened to a Docker bridge IP on
+    # the host's BIND9.
+    network_mode: host
+    volumes:
+      # Must match the zone stanzas in this host's own named.conf.
+      - ${BIND_ZONES_DIR:-/etc/bind/zones}:/etc/bind/zones
+      # Debian/Ubuntu's bind9 package auto-generates this at install time;
+      # the container reuses the host's key read-only rather than
+      # generating or storing its own.
+      - ${BIND_RNDC_KEY:-/etc/bind/rndc.key}:/etc/bind/rndc.key:ro
+      # Generated config fragment listing every zone assigned to this
+      # server. Add `include "<this path>";` to the host's named.conf once
+      # (see docker/bind9-agent/README.md) — nothing else about the host's
+      # config is touched.
+      - ${BIND_NAMED_CONF_INCLUDE:-/etc/bind/named.bindmanager.conf}:/etc/bind/named.bindmanager.conf
+      - ./agent-state:/var/lib/bindmanager-agent

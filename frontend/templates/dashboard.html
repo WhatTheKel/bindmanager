@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — BindManager{% endblock %}
+{% block nav_dashboard %}active{% endblock %}
+
+{% block content %}
+<div class="page-content">
+
+  <div class="page-header">
+    <div>
+      <div class="page-title">Dashboard</div>
+      <div class="page-subtitle">Overview of your DNS infrastructure</div>
+    </div>
+    <div style="display:flex;gap:.6rem">
+      <a href="{% url 'dns_manager:manage_zone_add' %}" class="btn btn-primary">+ Add Zone</a>
+      <a href="{% url 'dns_manager:manage_zone_list' %}" class="btn btn-ghost">Manage →</a>
+    </div>
+  </div>
+
+  <!-- Stats row -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-icon">
+        <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+        </svg>
+      </div>
+      <div class="label">Zones</div>
+      <div class="value">{{ zone_count }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">
+        <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+          <polyline points="10 9 9 9 8 9"/>
+        </svg>
+      </div>
+      <div class="label">Records</div>
+      <div class="value">{{ record_count }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">
+        <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="2" y="2" width="20" height="8" rx="2"/>
+          <rect x="2" y="14" width="20" height="8" rx="2"/>
+          <line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>
+        </svg>
+      </div>
+      <div class="label">Nameservers</div>
+      <div class="value">{{ ns_count }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">
+        <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+      </div>
+      <div class="label">Pending Sync</div>
+      <div class="value" {% if dirty_count %}style="color:var(--warning)"{% endif %}>{{ dirty_count }}</div>
+    </div>
+  </div>
+
+  <div class="grid-2col">
+
+    <!-- Pending sync zones -->
+    <div class="card">
+      <div class="card-header">
+        <span>Pending Sync</span>
+        <a href="{% url 'dns_manager:manage_zone_list' %}" class="btn btn-ghost btn-sm">View all</a>
+      </div>
+      {% if dirty_zones %}
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Zone</th><th>Type</th></tr></thead>
+          <tbody>
+            {% for z in dirty_zones %}
+            <tr>
+              <td><a href="{% url 'dns_manager:manage_zone_detail' z.pk %}" style="font-weight:600">{{ z.name }}</a></td>
+              <td><span class="badge badge-neutral">{{ z.get_zone_type_display }}</span></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty" style="padding:1.75rem">
+        <div style="color:var(--success);font-size:1.75rem;margin-bottom:.4rem">✓</div>
+        <p>All zones are synced.</p>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Recent activity -->
+    <div class="card">
+      <div class="card-header">
+        <span>Recent Activity</span>
+        <a href="{% url 'dns_manager:manage_audit_log' %}" class="btn btn-ghost btn-sm">Full log</a>
+      </div>
+      {% if recent_logs %}
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Action</th><th>Detail</th><th>User</th><th>When</th></tr></thead>
+          <tbody>
+            {% for log in recent_logs %}
+            <tr>
+              <td>
+                {% if log.action == 'create' %}<span class="badge badge-green">Create</span>
+                {% elif log.action == 'update' %}<span class="badge badge-blue">Update</span>
+                {% elif log.action == 'delete' %}<span class="badge badge-red">Delete</span>
+                {% elif log.action == 'sync' %}<span class="badge badge-amber">Sync</span>
+                {% elif log.action == 'login' %}<span class="badge badge-green">Login</span>
+                {% elif log.action == 'logout' %}<span class="badge badge-neutral">Logout</span>
+                {% elif log.action == 'login_fail' %}<span class="badge badge-red">Login Fail</span>
+                {% else %}<span class="badge badge-neutral">{{ log.action|capfirst }}</span>{% endif %}
+              </td>
+              <td style="font-size:.82rem;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ log.detail }}">{{ log.detail }}</td>
+              <td>{{ log.user.username|default:"system" }}</td>
+              <td style="color:var(--text-muted);font-size:.78rem;white-space:nowrap">{{ log.created_at|timesince }} ago</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty" style="padding:1.75rem"><p>No activity yet.</p></div>
+      {% endif %}
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}

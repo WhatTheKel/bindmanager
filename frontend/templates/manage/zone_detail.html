@@ -1,0 +1,174 @@
+{% extends "manage/base.html" %}
+{% load dns_tags %}
+
+{% block title %}{{ zone.name }} — Manage{% endblock %}
+{% block sb_zones %}active{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="breadcrumbs">
+  <a href="{% url 'dns_manager:manage_dashboard' %}">Dashboard</a>
+  <span class="sep">›</span>
+  <a href="{% url 'dns_manager:manage_zone_list' %}">Zones</a>
+  <span class="sep">›</span>
+  <span class="crumb-current monospace">{{ zone.name }}</span>
+</nav>
+{% endblock %}
+
+{% block manage_content %}
+<div class="page-header">
+  <div>
+    <div class="page-title" style="font-family:monospace">{{ zone.name }}</div>
+    <div class="page-subtitle">
+      {{ zone.get_zone_type_display }} &bull; IPv{{ zone.ip_version }} &bull;
+      {% if zone.is_dirty %}
+        <span style="color:var(--warning)">⏳ Pending sync</span>
+      {% else %}
+        <span style="color:var(--success)">✓ Synced</span>
+      {% endif %}
+    </div>
+  </div>
+  <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+    <a href="{% url 'dns_manager:manage_record_add' zone.pk %}" class="btn btn-primary">+ Add Record</a>
+    <a href="{% url 'dns_manager:manage_zone_edit' zone.pk %}" class="btn btn-ghost">Edit Zone</a>
+    <a href="{% url 'dns_manager:manage_zone_delete' zone.pk %}" class="btn btn-ghost text-danger"
+       data-delete-url="{% url 'dns_manager:manage_zone_delete' zone.pk %}"
+       data-delete-label="Delete zone &quot;{{ zone.name }}&quot;? All records will also be deleted. This cannot be undone.">Delete Zone</a>
+  </div>
+</div>
+
+<!-- SOA info (collapsed by default) -->
+<details style="margin-bottom:1.25rem">
+  <summary style="cursor:pointer;padding:.6rem 1rem;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;font-size:.85rem;font-weight:600;color:var(--text-muted);list-style:none;user-select:none">
+    ▸ SOA Parameters &amp; Nameservers
+  </summary>
+  <div style="border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;background:var(--surface)">
+    <div class="card-header" style="border-bottom:1px solid var(--border)">SOA Parameters</div>
+    <div class="detail-grid" style="padding:.75rem 1.25rem">
+      <div class="detail-item"><div class="key">Serial</div><div class="val monospace">{{ zone.serial }}</div></div>
+      <div class="detail-item"><div class="key">Refresh</div><div class="val">{{ zone.refresh }}s</div></div>
+      <div class="detail-item"><div class="key">Retry</div><div class="val">{{ zone.retry }}s</div></div>
+      <div class="detail-item"><div class="key">Expire</div><div class="val">{{ zone.expire }}s</div></div>
+      <div class="detail-item"><div class="key">Min TTL</div><div class="val">{{ zone.minimum_ttl }}s</div></div>
+      <div class="detail-item"><div class="key">Default TTL</div><div class="val">{{ zone.default_ttl }}s</div></div>
+    </div>
+    <div class="card-header" style="border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
+      <span>Nameservers</span>
+      <a href="{% url 'dns_manager:manage_zone_edit' zone.pk %}" class="btn btn-ghost btn-xs">Manage</a>
+    </div>
+    {% if zone.nameservers.all %}
+    <div style="padding:.75rem 1.25rem;display:flex;gap:.75rem;flex-wrap:wrap">
+      {% for ns in zone.nameservers.all %}
+      <span class="badge badge-neutral monospace">{{ ns.name }} ({{ ns.address }})</span>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div style="padding:.75rem 1.25rem;color:var(--text-muted);font-size:.85rem">No nameservers assigned.</div>
+    {% endif %}
+  </div>
+</details>
+
+<!-- Records -->
+<div class="card">
+  <div class="card-header">
+    <span>Records ({{ record_count }})</span>
+    <a href="{% url 'dns_manager:manage_record_add' zone.pk %}" class="btn btn-primary btn-sm">+ Add Record</a>
+  </div>
+
+  <!-- Record filter bar -->
+  <div style="padding:.65rem 1.25rem;border-bottom:1px solid var(--border);display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+    <form method="get" style="display:flex;gap:.4rem;flex:1;min-width:200px">
+      {% if rt %}<input type="hidden" name="rt" value="{{ rt }}">{% endif %}
+      <input type="search" name="rs" value="{{ rs }}" placeholder="Search name or value…"
+             class="form-input" style="flex:1;max-width:280px" data-live-search>
+      {% if rs or rt %}<a href="{% url 'dns_manager:manage_zone_detail' zone.pk %}" class="btn btn-ghost btn-sm">✕ Clear</a>{% endif %}
+    </form>
+
+    <!-- Type filter pills -->
+    <div style="display:flex;gap:.3rem;flex-wrap:wrap">
+      <a href="?{% if rs %}rs={{ rs }}&{% endif %}"
+         class="badge {% if not rt %}badge-blue{% else %}badge-neutral{% endif %}"
+         style="cursor:pointer;text-decoration:none;padding:.28rem .6rem">All</a>
+      {% for rtype in record_types %}
+      <a href="?rt={{ rtype }}{% if rs %}&rs={{ rs }}{% endif %}"
+         class="badge {% if rt == rtype %}badge-blue{% else %}badge-neutral{% endif %}"
+         style="cursor:pointer;text-decoration:none;padding:.28rem .6rem">{{ rtype }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if records_page %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>TTL</th>
+          <th>Priority</th>
+          <th>Value</th>
+          <th>Active</th>
+          <th style="text-align:right">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for record in records_page %}
+        <tr>
+          <td class="monospace">{{ record.name }}</td>
+          <td><span class="badge {{ record.record_type|rtype_class }}">{{ record.record_type }}</span></td>
+          <td class="monospace" style="font-size:.78rem">{{ record.ttl|default:"—" }}</td>
+          <td>{{ record.priority|default:"—" }}</td>
+          <td class="monospace"
+              style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+              title="{{ record.value }}">{{ record.value }}</td>
+          <td>
+            {% if record.is_active %}
+              <span class="badge badge-green" style="font-size:.65rem">Yes</span>
+            {% else %}
+              <span class="badge badge-neutral" style="font-size:.65rem">No</span>
+            {% endif %}
+          </td>
+          <td style="white-space:nowrap;text-align:right">
+            <a href="{% url 'dns_manager:manage_record_edit' zone.pk record.pk %}"
+               class="btn btn-ghost btn-xs">Edit</a>
+            <a href="{% url 'dns_manager:manage_record_delete' zone.pk record.pk %}"
+               class="btn btn-ghost btn-xs text-danger"
+               data-delete-url="{% url 'dns_manager:manage_record_delete' zone.pk record.pk %}"
+               data-delete-label="Delete {{ record.record_type }} record &quot;{{ record.name }}&quot; from {{ zone.name }}? This cannot be undone.">Delete</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Record pagination -->
+  {% if records_page.has_other_pages %}
+  <div class="pagination-bar">
+    <span class="text-sm text-muted">
+      {{ records_page.start_index }}–{{ records_page.end_index }} of {{ record_count }} records
+    </span>
+    <div class="flex-row">
+      {% if records_page.has_previous %}
+        <a href="?{% url_replace rpage=records_page.previous_page_number %}"
+           class="btn btn-ghost btn-sm"← Prev</a>
+      {% endif %}
+      {% if records_page.has_next %}
+        <a href="?{% url_replace rpage=records_page.next_page_number %}"
+           class="btn btn-ghost btn-sm"Next →</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div class="empty">
+    <div class="empty-icon">📄</div>
+    {% if rs or rt %}
+      <p>No records match your filter. <a href="{% url 'dns_manager:manage_zone_detail' zone.pk %}">Clear filters</a></p>
+    {% else %}
+      <p>No records yet. <a href="{% url 'dns_manager:manage_record_add' zone.pk %}">Add the first record</a>.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

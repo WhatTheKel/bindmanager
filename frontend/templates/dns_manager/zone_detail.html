@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% load dns_tags %}
+{% block title %}{{ zone.name }} — BindManager{% endblock %}
+{% block nav_zones %}active{% endblock %}
+
+{% block content %}
+
+<a href="{% url 'dns_manager:zone_list' %}" class="back-link">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="15 18 9 12 15 6"/>
+  </svg>
+  All Zones
+</a>
+
+<div class="page-header">
+  <div>
+    <div class="page-title" style="display:flex;align-items:center;gap:.6rem">
+      {{ zone.name }}
+      {% if zone.zone_type == 'forward' %}
+        <span class="badge badge-blue">Forward</span>
+      {% else %}
+        <span class="badge badge-neutral">Reverse</span>
+      {% endif %}
+      {% if zone.ip_version == 6 %}
+        <span class="badge badge-blue">IPv6</span>
+      {% else %}
+        <span class="badge badge-neutral">IPv4</span>
+      {% endif %}
+      {% if zone.is_dirty %}
+        <span class="badge badge-amber"><span class="dot dot-red"></span>Pending Sync</span>
+      {% else %}
+        <span class="badge badge-green"><span class="dot dot-green"></span>Synced</span>
+      {% endif %}
+    </div>
+    <div class="page-subtitle">
+      Created {% if zone.created_by %}by {{ zone.created_by.username }}{% endif %}
+      on {{ zone.created_at|date:"Y-m-d" }}
+      &bull; Last updated {{ zone.updated_at|date:"Y-m-d H:i" }} UTC
+    </div>
+  </div>
+  {% if user.is_staff %}
+  <a href="{% url 'dns_manager:manage_zone_detail' zone.pk %}" class="btn btn-ghost">Manage</a>
+  {% endif %}
+</div>
+
+<!-- SOA Parameters -->
+<div class="card section">
+  <div class="card-header">SOA Parameters</div>
+  <div class="detail-grid">
+    <div class="detail-item"><div class="key">Serial</div><div class="val monospace">{{ zone.serial }}</div></div>
+    <div class="detail-item"><div class="key">Default TTL</div><div class="val monospace">{{ zone.default_ttl }}s</div></div>
+    <div class="detail-item"><div class="key">Refresh</div><div class="val monospace">{{ zone.refresh }}s</div></div>
+    <div class="detail-item"><div class="key">Retry</div><div class="val monospace">{{ zone.retry }}s</div></div>
+    <div class="detail-item"><div class="key">Expire</div><div class="val monospace">{{ zone.expire }}s</div></div>
+    <div class="detail-item"><div class="key">Minimum TTL</div><div class="val monospace">{{ zone.minimum_ttl }}s</div></div>
+  </div>
+</div>
+
+<!-- Nameservers -->
+<div class="card section">
+  <div class="card-header">
+    <span>Nameservers</span>
+    <span class="badge badge-neutral">{{ zone.nameservers.all|length }}</span>
+  </div>
+  {% if zone.nameservers.all %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Hostname</th><th>Address</th><th>Config Dir</th><th>Active</th></tr>
+      </thead>
+      <tbody>
+        {% for ns in zone.nameservers.all %}
+        <tr>
+          <td class="monospace">{{ ns.name }}</td>
+          <td class="monospace">{{ ns.address }}</td>
+          <td class="monospace" style="color:var(--text-muted)">{{ ns.config_dir }}</td>
+          <td>
+            {% if ns.is_active %}
+              <span class="badge badge-green">Active</span>
+            {% else %}
+              <span class="badge badge-red">Inactive</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty" style="padding:1.5rem"><p>No nameservers assigned to this zone.</p></div>
+  {% endif %}
+</div>
+
+<!-- Records -->
+<div class="card section">
+  <div class="card-header">
+    <span>Records ({{ record_count }})</span>
+    {% if user.is_staff %}
+    <a href="{% url 'dns_manager:manage_record_add' zone.pk %}" class="btn btn-primary btn-sm">+ Add Record</a>
+    {% endif %}
+  </div>
+
+  <!-- Filter bar -->
+  <div style="padding:.65rem 1.25rem;border-bottom:1px solid var(--border);display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+    <form method="get" style="display:flex;gap:.4rem;flex:1;min-width:180px">
+      {% if rt %}<input type="hidden" name="rt" value="{{ rt }}">{% endif %}
+      <input type="search" name="rs" value="{{ rs }}" placeholder="Search name or value…"
+             class="form-input" style="flex:1;max-width:280px">
+      <button type="submit" class="btn btn-ghost btn-sm">Search</button>
+      {% if rs or rt %}<a href="{% url 'dns_manager:zone_detail' zone.pk %}" class="btn btn-ghost btn-sm">✕ Clear</a>{% endif %}
+    </form>
+
+    <!-- Type filter pills -->
+    <div style="display:flex;gap:.3rem;flex-wrap:wrap">
+      <a href="?{% if rs %}rs={{ rs }}{% endif %}"
+         class="badge {% if not rt %}badge-blue{% else %}badge-neutral{% endif %}"
+         style="cursor:pointer;text-decoration:none;padding:.28rem .6rem">All</a>
+      {% for rtype in record_types %}
+      <a href="?rt={{ rtype }}{% if rs %}&rs={{ rs }}{% endif %}"
+         class="badge {% if rt == rtype %}badge-blue{% else %}badge-neutral{% endif %}"
+         style="cursor:pointer;text-decoration:none;padding:.28rem .6rem">{{ rtype }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if records_page %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th><th>Type</th><th>TTL</th><th>Priority</th><th>Value</th><th>Active</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for record in records_page %}
+        <tr {% if not record.is_active %}style="opacity:.5"{% endif %}>
+          <td class="monospace">{{ record.name }}</td>
+          <td><span class="badge {{ record.record_type|rtype_class }}">{{ record.record_type }}</span></td>
+          <td class="monospace" style="color:var(--text-muted)">
+            {% if record.ttl %}{{ record.ttl }}s{% else %}&mdash;{% endif %}
+          </td>
+          <td class="monospace" style="color:var(--text-muted)">
+            {% if record.priority is not None %}{{ record.priority }}{% else %}&mdash;{% endif %}
+          </td>
+          <td class="monospace" style="max-width:360px;word-break:break-all">{{ record.value }}</td>
+          <td>
+            {% if record.is_active %}
+              <span class="badge badge-green">Yes</span>
+            {% else %}
+              <span class="badge badge-red">No</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  {% if records_page.has_other_pages %}
+  <div class="pagination-bar">
+    <span class="text-sm text-muted">
+      {{ records_page.start_index }}–{{ records_page.end_index }} of {{ record_count }} records
+    </span>
+    <div class="flex-row">
+      {% if records_page.has_previous %}
+        <a href="?{% if rs %}rs={{ rs }}&{% endif %}{% if rt %}rt={{ rt }}&{% endif %}rpage={{ records_page.previous_page_number }}"
+           class="btn btn-ghost btn-sm">← Prev</a>
+      {% endif %}
+      {% if records_page.has_next %}
+        <a href="?{% if rs %}rs={{ rs }}&{% endif %}{% if rt %}rt={{ rt }}&{% endif %}rpage={{ records_page.next_page_number }}"
+           class="btn btn-ghost btn-sm">Next →</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div class="empty">
+    <div class="empty-icon">📋</div>
+    {% if rs or rt %}
+      <p>No records match your filter. <a href="{% url 'dns_manager:zone_detail' zone.pk %}">Clear filters</a></p>
+    {% else %}
+      <p>No records yet. Add them via the <a href="{% url 'dns_manager:manage_zone_detail' zone.pk %}">management panel</a> or <a href="/api/v1/records/">API</a>.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

@@ -1,0 +1,14 @@
+.git
+.env
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info
+dist/
+build/
+staticfiles/
+bind_zones/
+node_modules/
+.DS_Store
