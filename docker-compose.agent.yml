@@ -1,4 +1,4 @@
-# Optional alternative to INSTALL.md's Part 4 — for a host that ALREADY
+# Optional alternative to INSTALL-DEBIAN.md's Part 4 — for a host that ALREADY
 # has BIND9 installed and running. Deploys ONLY the pull agent in a
 # container; BIND9 itself keeps running on the bare host, untouched beyond
 # the one `include` line and the three bind-mounts below.

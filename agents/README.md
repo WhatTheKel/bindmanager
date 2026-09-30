@@ -1,12 +1,12 @@
 # BindManager pull agent
 
 Deployed on each **physical BIND nameserver** — for a single-server setup
-this is the same box as the BindManager app itself (see `INSTALL.md`'s
+this is the same box as the BindManager app itself (see `INSTALL-DEBIAN.md`'s
 Part 4); for additional nameservers it's a separate box. This directory
 covers the bare-metal + systemd path. If you'd rather run the agent in a
 container instead — either alongside a fresh BIND9 install
 (`docker/bind9-node/`) or against a BIND9 the host already has
-(`docker/bind9-agent/`) — see `INSTALL.md`'s Part 4 and "Scaling beyond
+(`docker/bind9-agent/`) — see `INSTALL-DEBIAN.md`'s Part 4 and "Scaling beyond
 one server" section for all three options. Pulls the zones assigned to
 that server from the REST API, writes and reloads them locally. See the
 top-level docstring in `bindmanager_agent.py` for the full sync algorithm.
@@ -25,7 +25,14 @@ only the zones assigned to it, validating, and reloading locally.
 2. Copy `bindmanager_agent.py` to the server (e.g. `/opt/bindmanager-agent/`).
    Stdlib only — no `pip install` required.
 3. Copy `config.example.ini` to `/etc/bindmanager-agent/config.ini`, fill in
-   `api_url` and `api_key`, `chmod 600` it.
+   `api_url` and `api_key`, `chmod 600` it. The example's `zones_dir` and
+   `named_conf_include` are **Debian/Ubuntu** paths (`/etc/bind/...`) — on
+   RHEL use `/var/named/bindmanager` and `/etc/named/bindmanager.conf`
+   instead (see [`INSTALL-NAMESERVER-RHEL8.md`](../INSTALL-NAMESERVER-RHEL8.md) Part 4.3). A wrong
+   `named_conf_include` makes the agent write zone files and then crash
+   before BIND is told about them.
+   Needs Python 3.8+ — on RHEL 8 install `python39` and point the unit's
+   `ExecStart` at `/usr/bin/python3.9`.
 4. If using `named_conf_include`, add one line to `named.conf`:
    ```
    include "/etc/bind/named.bindmanager.conf";
@@ -53,6 +60,7 @@ only the zones assigned to it, validating, and reloading locally.
 
 ## Rotating a compromised key
 
-Manage > Nameservers > select row > admin action "Regenerate API key", or
-via `/admin/`. Update `config.ini` on that server and restart/re-run the
-agent — the old key stops working immediately.
+In the Django admin: `/admin/` > **Name servers** > tick the row > action
+**"Regenerate API key"** (the Manage UI shows keys but can't rotate them).
+Update `config.ini` on that server and re-run the agent — the old key stops
+working immediately.

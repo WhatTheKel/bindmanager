@@ -2,7 +2,7 @@
 
 Deploys just `bindmanager_agent.py` in a container; BIND9 itself keeps
 running on the bare host exactly as it does today. This is a third path
-alongside `INSTALL.md`'s two other options (Part 4, and the "Scaling
+alongside `INSTALL-DEBIAN.md`'s two other options (Part 4, and the "Scaling
 beyond one server" section):
 
 | | BIND9 runs | Agent runs | Touches host's existing BIND config |
@@ -81,6 +81,16 @@ On the nameserver host (BIND9 already installed and running):
 
 Repeat on each nameserver — only `.env.agent`'s `BINDMANAGER_API_KEY` (and
 possibly the `BIND_*` paths, if hosts differ) changes.
+
+## RHEL / SELinux hosts
+
+The defaults above are Debian/Ubuntu paths. On RHEL the equivalents are
+`BIND_ZONES_DIR=/var/named/bindmanager`, `BIND_RNDC_KEY=/etc/rndc.key` and
+`BIND_NAMED_CONF_INCLUDE=/etc/named/bindmanager.conf` — but with SELinux
+enforcing, a container writing into `/var/named` is denied unless you
+relabel those paths for container access, which in turn stops `named`
+from reading them. On RHEL, run the agent on bare metal instead
+([`INSTALL-NAMESERVER-RHEL8.md`](../../INSTALL-NAMESERVER-RHEL8.md)) — it needs nothing extra.
 
 ## Keeping `bindmanager_agent.py` in sync
 

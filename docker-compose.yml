@@ -3,7 +3,7 @@ services:
   # Hidden primary — answers no DNS queries. Exists only so the worker's
   # `rndc reload <zone>` (writer.py, called unconditionally from
   # tasks.sync_zone) has a real named to talk to. The 3 actually-answering
-  # nameservers run agents/bindmanager_agent.py instead — see INSTALL.md.
+  # nameservers run agents/bindmanager_agent.py instead — see INSTALL-DEBIAN.md.
   bind:
     build: ./docker/bind9
     restart: unless-stopped

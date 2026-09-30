@@ -2,7 +2,7 @@
 // `named` to talk to (writer.py's reload_zone() calls `rndc reload <zone>`
 // unconditionally). Nothing queries this instance for DNS resolution; the
 // 3 real answering nameservers are the ones agents/bindmanager_agent.py
-// runs on. See "Multi-server distribution" in INSTALL.md / README.md.
+// runs on. See "Multi-server distribution" in INSTALL-DEBIAN.md / README.md.
 //
 // Zones are never declared here statically — zone-watcher.sh registers each
 // one dynamically via `rndc addzone` the first time it sees the .zone file

@@ -4,6 +4,32 @@ A modern, Django-based web application for managing BIND DNS — a web-based BIN
 
 ---
 
+## Documentation — which file to read
+
+BindManager has two halves: the **app** (web UI + API + sync engine, run
+once with Docker) and one or more **nameservers** (plain BIND plus a small
+pull agent that fetches zones from the app). Pick the guide for the half
+you're setting up:
+
+| I want to… | Read |
+|---|---|
+| Install everything from scratch on one **RHEL 8** server (BIND + app + agent) | [`INSTALL-RHEL8.md`](INSTALL-RHEL8.md) |
+| Install everything from scratch on one **Debian/Ubuntu** server (BIND + app + agent) | [`INSTALL-DEBIAN.md`](INSTALL-DEBIAN.md) — also the fullest explanation of how the pieces fit |
+| Add a **RHEL 8** server as an extra nameserver for an app that's already running | [`INSTALL-NAMESERVER-RHEL8.md`](INSTALL-NAMESERVER-RHEL8.md) — BIND, SELinux, firewalld, agent, troubleshooting |
+| Repeat an install I've done before, quickly | [`INSTALL-CHECKLIST.md`](INSTALL-CHECKLIST.md) — copy-paste steps only (app + RHEL 8 nameserver + test zone) |
+| Understand or configure the pull agent itself | [`agents/README.md`](agents/README.md) |
+| Run a nameserver as a Docker container (BIND + agent together) | [`docker/bind9-node/README.md`](docker/bind9-node/README.md) |
+| Keep BIND on the host but run only the agent in Docker | [`docker/bind9-agent/README.md`](docker/bind9-agent/README.md) |
+| Look up app features, REST API, config, branding, SSO | This README (below) |
+
+**New here?** Start with `INSTALL-RHEL8.md` or `INSTALL-DEBIAN.md`
+(whichever matches your OS) — you end with one working server. Add more
+nameservers later with `INSTALL-NAMESERVER-RHEL8.md` (RHEL) or the
+"Scaling beyond one server" section of `INSTALL-DEBIAN.md`. Once you've
+done it once, `INSTALL-CHECKLIST.md` is all you need next time.
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -20,11 +46,6 @@ A modern, Django-based web application for managing BIND DNS — a web-based BIN
 | Tests | pytest + pytest-django (SQLite in-memory) |
 
 ---
-
-> **Setting this up on a real server for the first time?** This section
-> covers the app container stack only. See [`INSTALL.md`](INSTALL.md) for
-> the full runbook — a brand-new VM with BIND9 already installed, through
-> to a live, answering nameserver — plus how to add more nameservers later.
 
 ## Prerequisites
 
@@ -196,12 +217,13 @@ bindmanager/
 │       ├── templatetags/
 │       │   └── dns_tags.py     # rtype_class filter + url_replace tag
 │       ├── urls.py             # All URL patterns
+│       ├── validators.py       # validate_record_value — per-type record value checks (UI, admin, API)
 │       ├── views.py            # Public read-only zone/record views
 │       └── zone_engine/
 │           ├── generator.py    # Builds BIND zone file content via Jinja2
 │           └── writer.py       # Atomic file write, named-checkzone + rndc reload
 ├── config/
-│   ├── __init__.py             # PyMySQL shim (install_as_MySQLdb) + celery_app export
+│   ├── __init__.py             # celery_app export + optional PyMySQL shim (no-op — mysqlclient is the driver)
 │   ├── settings/
 │   │   ├── base.py             # Core settings (used by all environments)
 │   │   ├── development.py
@@ -244,7 +266,8 @@ bindmanager/
 │   ├── test_permissions.py     # IsStaffOrReadOnly (21 tests)
 │   ├── test_template_tags.py   # rtype_class, url_replace (21 tests)
 │   ├── test_models.py          # Zone, Record, AuditLog, NameServer (12 tests)
-│   └── test_agent_api.py       # NameServer API key + pull-agent endpoints (12 tests)
+│   ├── test_agent_api.py       # NameServer API key + pull-agent endpoints + agent rate limit (14 tests)
+│   └── test_validators.py      # Record value validation (form + API) + named-checkzone error text (32 tests)
 ├── pytest.ini
 ├── nginx/nginx.conf
 ├── docker/mysql/init.sql       # One-time MySQL database + user creation
@@ -280,7 +303,7 @@ bindmanager/
 
 Zone files are written to `./bind_zones/` on the host, mounted into containers at `/etc/bind/zones`.
 
-> **Required one-time setup:** Celery Beat's schedule is stored in the database (`django-celery-beat`), not hardcoded — nothing seeds it automatically. Before `sync_dirty_zones` will ever run, create a Periodic Task in `/admin/django_celery_beat/periodictask/` pointing at `apps.dns_manager.tasks.sync_dirty_zones` on whatever interval you want (e.g. every minute). Without this step the `beat` container runs but never dispatches syncs.
+> **Required one-time setup:** Celery Beat's schedule is stored in the database (`django-celery-beat`), not hardcoded — nothing seeds it automatically. Before `sync_dirty_zones` will ever run, create a Periodic Task in `/admin/django_celery_beat/periodictask/` pointing at `apps.dns_manager.tasks.sync_dirty_zones` on whatever interval you want (e.g. every minute) — or run the one-liner in [`INSTALL-DEBIAN.md` Part 3](INSTALL-DEBIAN.md#part-3--turn-on-the-sync-engine-do-not-skip-this--verify-it). Without this step the `beat` container runs but never dispatches syncs, and nothing reports an error.
 
 Any record or zone change automatically sets `is_dirty = True`. The Celery Beat scheduler triggers `sync_dirty_zones` on the configured schedule, which dispatches an independent `sync_zone` task for each dirty zone. Each per-zone task:
 
@@ -289,7 +312,11 @@ Any record or zone change automatically sets `is_dirty = True`. The Celery Beat 
 3. Atomically replaces the old file
 4. Calls `rndc reload <zone>` on the nameserver
 5. Clears the dirty flag and writes an audit log entry
-6. Retries up to 3 times (30-second delay) if anything fails
+6. Retries up to 3 times (30-second delay) if anything fails — the worker log and the audit log show `named-checkzone`'s actual reason
+
+**Record validation on save:** the Manage UI, Django admin and REST API all reject record values that can never be valid, before they reach the sync pipeline — `A`/`AAAA` values must be real IPv4/IPv6 addresses, and `NS`/`CNAME`/`PTR`/`MX` values must be hostnames, not IPs (an IP there is almost always a mistyped `A` record). Everything else is still validated by `named-checkzone` at sync time.
+
+**Zone contents you don't enter yourself:** each zone's `NS` records come from its assigned nameservers (their `name` field), and the SOA primary is the first assigned nameserver. If that name is inside the zone (e.g. `ns1.example.com` for `example.com`), add an `A` record for it — `named-checkzone` rejects the zone without that glue.
 
 **Manual sync via CLI:**
 
@@ -369,9 +396,9 @@ curl http://<host>:81/api/v1/zones/ \
   -H "Authorization: Bearer <access_token>"
 ```
 
-**Permissions:** All endpoints require authentication. Write operations (POST / PUT / PATCH / DELETE) additionally require `is_staff=True`. Read operations are available to any authenticated user.
+**Permissions:** All endpoints require authentication. Write operations (POST / PUT / PATCH / DELETE) additionally require `is_staff=True`. Read operations are available to any authenticated user. The `/api/v1/agent/` endpoints authenticate with a nameserver's Agent API key instead and only return zones assigned to that nameserver that have already synced cleanly.
 
-**Rate limiting:** Anonymous requests 20/min, authenticated requests 300/min, applied globally.
+**Rate limiting:** Anonymous requests 20/min, authenticated requests 300/min, pull-agent requests 300/min per nameserver key — applied to every endpoint.
 
 **Endpoints:**
 
@@ -385,6 +412,8 @@ curl http://<host>:81/api/v1/zones/ \
 | GET / POST | `/api/v1/nameservers/` | List or create nameservers |
 | GET / PATCH / DELETE | `/api/v1/nameservers/{id}/` | Retrieve, update, or delete a nameserver |
 | GET | `/api/v1/audit/` | Audit log (read-only) |
+| GET | `/api/v1/agent/zones/` | Pull agent: zones assigned to this nameserver (`Authorization: ApiKey <key>`, not JWT) |
+| GET | `/api/v1/agent/zones/{name}/` | Pull agent: rendered zone file for one assigned zone |
 | POST | `/api/token/` | Obtain JWT access + refresh tokens |
 | POST | `/api/token/refresh/` | Refresh JWT access token |
 
@@ -395,7 +424,7 @@ curl http://<host>:81/api/v1/zones/ \
 ## Running Tests
 
 ```bash
-# All tests (97 total)
+# All tests (131 total)
 pytest
 
 # One module
@@ -421,7 +450,7 @@ The following controls are active out of the box:
 | HTTP security headers | CSP, `Referrer-Policy`, `Permissions-Policy`, `X-Content-Type-Options`, `X-Frame-Options` set by Nginx on every response |
 | Session timeout | 8 hours (configurable via `SESSION_COOKIE_AGE` in `.env`) |
 | Login rate limiting | IP-based; HTTP 429 returned on the 10th failed attempt within 5 minutes |
-| API rate limiting | DRF throttling — 20/min anonymous, 300/min authenticated, applied to every REST endpoint |
+| API rate limiting | DRF throttling — 20/min anonymous, 300/min authenticated, 300/min per pull-agent key, applied to every REST endpoint |
 | Audit log integrity | Append-only from application code; add/change/delete disabled in the Django admin |
 | API docs | `/api/v1/` requires `is_superuser=True` — staff-only users are redirected to login |
 | Dependency pinning | All packages pinned to exact versions in `requirements.txt` |

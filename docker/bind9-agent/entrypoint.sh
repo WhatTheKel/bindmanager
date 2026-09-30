@@ -33,7 +33,7 @@ if ! rndc status >/dev/null 2>&1; then
          "bind-mounted in (see docker/bind9-agent/README.md)." >&2
 fi
 
-# Same script INSTALL.md Part 4's Option A runs via a systemd timer on a bare
+# Same script INSTALL-DEBIAN.md Part 4's Option A runs via a systemd timer on a bare
 # host — here a poll loop replaces the timer. Unlike docker-compose.node.yml
 # this container never starts named itself; the host's own BIND9 install
 # stays authoritative and untouched beyond the bind-mounted paths.

@@ -1,13 +1,17 @@
-# BindManager — Installation Guide (Single-Server, From Scratch)
+# BindManager — Installation Guide (Debian/Ubuntu, Single-Server, From Scratch)
 
 This is a start-to-finish runbook for the most common real starting point:
-**one brand-new Linux VM that already has BIND9 installed, no existing zone
-data, and you want BindManager to take over managing it.** Everything —
-the BindManager app and the nameserver it manages — runs on this one box.
+**one brand-new Debian/Ubuntu VM, no existing zone data, and you want
+BindManager to manage the DNS it serves.** Everything — BIND9, the
+BindManager app, and the pull agent that connects them — runs on this one
+box. (On RHEL 8, use [`INSTALL-RHEL8.md`](INSTALL-RHEL8.md) instead.)
 
 If you later add a second or third physical nameserver, see
 [Scaling beyond one server](#scaling-beyond-one-server) at the end — you
 don't need to plan for that now, and nothing in this guide has to be redone.
+
+> **Done this before?** [`INSTALL-CHECKLIST.md`](INSTALL-CHECKLIST.md) is a
+> short copy-paste checklist of the whole install.
 
 ## Architecture (single server)
 
@@ -28,7 +32,7 @@ don't need to plan for that now, and nothing in this guide has to be redone.
                     │   MariaDB · Redis               │
                     │                                │
                     │  Native OS services:            │
-                    │   BIND9 (already installed) ◄──────── pull agent (systemd
+                    │   BIND9 (Part 0)            ◄──────── pull agent (systemd
                     │   → answers real DNS on :53     │      timer, polls the
                     │                                │      app over HTTP)
                     └──────────────────────────────┘
@@ -42,9 +46,9 @@ tiny `bind` container. It answers **no** DNS queries and isn't published on
 any port — it exists purely so the `worker` container's `rndc reload` (part
 of validating every zone change) has a real `named` to talk to. The BIND9
 you actually care about — the one resolvers query on port 53 — is the one
-already installed on this VM's bare OS. A small **pull agent** (a script,
-not a container) bridges the two: it polls BindManager's REST API over
-HTTP and writes/reloads zones on your real, already-installed BIND9. This
+you install on this VM's bare OS in Part 0. A small **pull agent** (a
+script, not a container) bridges the two: it polls BindManager's REST API
+over HTTP and writes/reloads zones on that real BIND9. This
 indirection is what lets the same mechanism scale to 2 or 20 nameservers
 later without changing how the app itself works.
 
@@ -54,11 +58,54 @@ later without changing how the app itself works.
 
 | Requirement | Notes |
 |---|---|
-| A Linux VM (Debian/Ubuntu assumed below; adjust package manager for others) | |
-| BIND9 already installed and running | `bind9`, `bind9-utils`, `bind9-dnsutils` packages; out of scope here — same as setting up any authoritative nameserver |
+| A Debian 12 / Ubuntu 22.04+ VM with a static IP | On RHEL 8 use [`INSTALL-RHEL8.md`](INSTALL-RHEL8.md) — package names, paths, SELinux and the agent's Python version all differ |
 | Docker + Docker Compose | For the BindManager app stack |
 | Root or sudo access | To install MariaDB/Redis and manage systemd units |
 | No existing zone data to migrate | If you *do* have zones from another system, import them via the Django admin or API after this guide — not covered here |
+
+---
+
+## Part 0 — Install BIND9 as an authoritative nameserver
+
+```bash
+apt update && apt install -y bind9 bind9-utils bind9-dnsutils
+```
+
+The stock config is a localhost-oriented caching resolver. Replace the
+`options { ... }` block in `/etc/bind/named.conf.options` so it answers
+authoritatively for everyone and recurses for no one:
+
+```
+options {
+        directory "/var/cache/bind";
+        listen-on { any; };
+        listen-on-v6 { any; };
+        allow-query { any; };
+        recursion no;
+        notify no;
+};
+```
+
+- `recursion no` — an internet-facing open resolver gets abused for
+  amplification attacks; an authoritative server shouldn't recurse.
+- `notify no` — the agent writes every zone as `type master` on every
+  server, each fed by BindManager directly, so there are no secondaries
+  to NOTIFY.
+
+Create the zone directory the agent will write into, then check and
+restart:
+
+```bash
+mkdir -p /etc/bind/zones
+named-checkconf && systemctl restart named     # the unit is `bind9` on older releases
+systemctl enable named
+rndc status | head -1                           # "server is up and running"
+ufw allow 53                                    # if ufw is enabled (covers UDP and TCP)
+```
+
+`rndc` works out of the box — the package generates `/etc/bind/rndc.key`
+at install time. The `include` line that hooks BindManager's zones into
+BIND is added in Part 4.2.
 
 ---
 
@@ -200,6 +247,19 @@ just leaves every future zone/record change sitting unsynced forever.
    `apps.dns_manager.tasks.sync_dirty_zones`, **Interval Schedule** to the
    one you just created, **Enabled** checked. Save.
 
+Or do both in one command instead of clicking through the admin:
+
+```bash
+docker compose exec -T web python manage.py shell -c "
+from django_celery_beat.models import IntervalSchedule, PeriodicTask
+s,_=IntervalSchedule.objects.get_or_create(every=1, period=IntervalSchedule.MINUTES)
+PeriodicTask.objects.get_or_create(name='Sync dirty zones', defaults=dict(
+    task='apps.dns_manager.tasks.sync_dirty_zones', interval=s, enabled=True))"
+```
+
+Within a minute, `docker compose logs beat` should show
+`Sending due task Sync dirty zones`.
+
 **Verify it actually works before moving on** — don't just trust that you
 clicked the right things:
 
@@ -225,10 +285,16 @@ nameservers, just pointed at `localhost` since everything is one box here.
 
 ### 4.1 Create the NameServer row
 
-In the app: **Manage → Nameservers → + Add Nameserver**. `address` and
-`config_dir` are informational (rendered into NS/SOA records) — use this
-VM's real address and BIND9's actual zone directory (commonly
-`/etc/bind/zones` or `/var/lib/bind`, depending on your distro's layout).
+In the app: **Manage → Nameservers → + Add Nameserver**.
+
+- `name` — the nameserver's fully-qualified DNS name (e.g.
+  `ns1.example.com`). **This is the only field that ends up in zone
+  files:** every zone assigned to this server gets an `NS` record for it,
+  and the first assigned nameserver becomes the SOA primary.
+- `address` and `config_dir` — informational only (shown in the UI, not
+  rendered anywhere, not read by the agent). Use this VM's real IP and
+  BIND9's actual zone directory (commonly `/etc/bind/zones`).
+
 Save it, then copy the **Agent API Key** shown on the row — you'll need it
 next.
 
@@ -295,8 +361,18 @@ systemctl list-timers bindmanager-agent.timer   # confirm it's scheduled (every 
 1. **Manage → Zones → Add Zone.** Enter a domain you control (or a
    throwaway one for testing), assign it to the NameServer row from 4.1,
    save.
-2. **Manage → Zones → your zone → Add Record.** Add at least an `A`
-   record (e.g. `www` → an IP).
+2. **Manage → Zones → your zone → Add Record.** Add:
+   - an **A** record for the nameserver's own name if it's inside this
+     zone — e.g. `ns1` → this VM's IP when the NameServer row is
+     `ns1.<your zone>`. Without this "glue" record `named-checkzone`
+     rejects the zone (`has no address records`) and it never syncs.
+   - at least one more record to test with, e.g. `www` **A** → an IP.
+
+   Don't add an NS record yourself — BindManager generates it from the
+   zone's assigned nameservers. And never create `ns1` as an **NS** record
+   with an IP as its value (a common slip when you mean "ns1's address is
+   …"): that makes BIND treat `ns1` as a delegated sub-zone, so the name
+   never resolves. The app rejects that combination when you save.
 3. Wait for the Beat interval (Part 3), then check:
    ```bash
    docker compose logs -f worker
@@ -325,6 +401,7 @@ If all of that resolves, the full pipeline — UI → database → Celery sync
 | Symptom | Cause | Fix |
 |---|---|---|
 | Zone stays `is_dirty=True` indefinitely | No Celery Beat periodic task created (Part 3), or it's disabled | Check `/admin/django_celery_beat/periodictask/`; check `docker compose logs beat` for the "Sending due task" line |
+| Zone stays `is_dirty=True`, worker logs `named-checkzone failed for <zone>` | A record in the zone makes it invalid | The lines after that message give `named-checkzone`'s reason; fix that record in the UI and the next sync picks it up |
 | `docker compose exec worker rndc status` fails | Hidden `bind` container unhealthy | `docker compose logs bind`; `docker compose ps` should show it `healthy` |
 | `web`/`worker` can't reach MariaDB/Redis | Service still bound to `127.0.0.1` only | Re-check Part 1.1 / 1.2's `bind-address` edits; `systemctl restart mariadb redis-server` after changing |
 | Zone `"has no address records"` in `docker compose logs bind` | An in-bailiwick NS record (e.g. `ns1.<zone>`) has no matching A/AAAA record in the same zone | Add the missing glue record |
@@ -344,7 +421,7 @@ If all of that resolves, the full pipeline — UI → database → Celery sync
 - [ ] Firewalled MariaDB (3306) and Redis (6379) to Docker's subnet only — not `0.0.0.0/0`
 - [ ] `chmod 600` on `/etc/bindmanager-agent/config.ini` (it's an API key)
 - [ ] TLS terminated in front of Nginx — this repo runs plain HTTP on :81 by default; put a reverse proxy or load balancer with a real cert in front for anything beyond a lab
-- [ ] Rotate the NameServer's API key if it ever leaks: Manage → Nameservers → select row → **Regenerate API key**, then update `config.ini` and restart the timer
+- [ ] Rotate the NameServer's API key if it ever leaks: in the Django admin (`/admin/` → **Name servers**), tick the row, choose the **Regenerate API key** action, then update `config.ini` on that server (the old key stops working immediately)
 - [ ] `.env` and `/etc/bindmanager-agent/config.ini` are not committed to version control
 
 ---
@@ -358,7 +435,7 @@ VM's real address, not `localhost`). Three ways to do that, depending on
 what the new box looks like:
 
 - **Bare metal with BIND9 already there** — same as Part 4 above.
-- **RHEL 8 box, BIND not yet installed** — [`INSTALL-RHEL.md`](INSTALL-RHEL.md) (packages, SELinux, firewalld, Python 3.9 for the agent).
+- **RHEL 8 box** — [`INSTALL-NAMESERVER-RHEL8.md`](INSTALL-NAMESERVER-RHEL8.md) (BIND, SELinux, firewalld, Python 3.9 for the agent).
 - **Fresh box, nothing installed yet** — [`docker/bind9-node/README.md`](docker/bind9-node/README.md) bakes BIND9 + the agent into one container.
 - **BIND9 already there, but you want the agent containerized anyway** — [`docker/bind9-agent/README.md`](docker/bind9-agent/README.md).
 

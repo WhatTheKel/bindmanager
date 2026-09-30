@@ -37,7 +37,7 @@ until rndc status >/dev/null 2>&1; do
 done
 echo "entrypoint: named is up"
 
-# Same script Part 4 of INSTALL.md runs via a systemd timer on a bare host —
+# Same script Part 4 of INSTALL-DEBIAN.md runs via a systemd timer on a bare host —
 # here the poll loop replaces the timer, everything else is identical.
 ( while true; do
     python3 /opt/bindmanager-agent/bindmanager_agent.py --config /etc/bindmanager-agent/config.ini -v || true

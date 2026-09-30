@@ -1,4 +1,4 @@
-# bind9-node — containerized alternative to INSTALL.md's agent setup
+# bind9-node — containerized alternative to INSTALL-DEBIAN.md's agent setup
 
 BIND9 + `bindmanager_agent.py` in one container, instead of installing both
 directly on the nameserver host. Deploy `docker-compose.node.yml` (repo
@@ -6,7 +6,7 @@ root) on each answering nameserver — same idea as `docker-compose.yml` on
 the app host, but for `ns1`/`ns2`/`ns3` instead.
 
 **This is an optional path, not the recommended default.** Read this before
-choosing it over the bare-metal + agent-script path in `INSTALL.md` Part 4.
+choosing it over the bare-metal + agent-script path in `INSTALL-DEBIAN.md` Part 4.
 
 ## When this is a good fit
 
@@ -27,13 +27,13 @@ choosing it over the bare-metal + agent-script path in `INSTALL.md` Part 4.
   app — or, if you still want the agent itself containerized, see
   [`docker/bind9-agent/`](../bind9-agent/README.md), which leaves BIND9 on
   the bare host and containerizes only the agent.
-- **High query volume.** DNS over UDP:53 through Docker's default bridge
-  networking adds a NAT/userland-proxy hop and rewrites the source IP
-  Docker's networking sees (though BIND itself still sees the real client
-  IP in the UDP payload it's fine for query logging — the concern is
-  raw throughput/latency at scale, not correctness). Set
-  `network_mode: host` in `docker-compose.node.yml` instead of publishing
-  `ports:` if this matters for your deployment.
+- **High query volume, or you need real client IPs.** DNS over UDP:53
+  through Docker's published ports adds a NAT/userland-proxy hop, which
+  costs throughput/latency at scale — and when the userland proxy handles
+  the traffic, `named` sees the Docker gateway as the client instead of
+  the real resolver, which breaks per-client ACLs and makes query logs
+  useless. Set `network_mode: host` in `docker-compose.node.yml` (and drop
+  the `ports:` block) if either matters for your deployment.
 - **Docker's own uptime becomes a dependency of your DNS uptime.** On bare
   metal, BIND runs whether or not anything else on the box is healthy. In
   a container, a Docker daemon issue takes your nameserver down with it.
@@ -56,7 +56,7 @@ docker compose -f docker-compose.node.yml logs -f
 The container starts `named`, waits for `rndc status` to succeed, then
 loops the agent every `BINDMANAGER_POLL_INTERVAL` seconds (default 120) —
 same script, same behavior as the systemd-timer deployment in
-`INSTALL.md` Part 4, just running as a background loop instead.
+`INSTALL-DEBIAN.md` Part 4, just running as a background loop instead.
 
 ## How the rndc auth differs from the app host's `bind` service
 

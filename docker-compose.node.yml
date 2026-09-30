@@ -1,4 +1,4 @@
-# Optional alternative to INSTALL.md's Part 4 (bare-metal agent setup).
+# Optional alternative to INSTALL-DEBIAN.md's Part 4 (bare-metal agent setup).
 #
 # Deploy THIS file — not docker-compose.yml — on each answering nameserver
 # (ns1/ns2/ns3), instead of installing BIND9 + agents/bindmanager_agent.py
@@ -8,7 +8,7 @@
 # Not a drop-in replacement for a bare-metal BIND install if you're already
 # running one with its own config/other zones — see
 # docker/bind9-node/README.md for the tradeoffs before choosing this over
-# the bare-metal + agent path in INSTALL.md Part 4.
+# the bare-metal + agent path in INSTALL-DEBIAN.md Part 4.
 #
 # Usage (on the nameserver host, not the BindManager app host):
 #   cp .env.node.example .env.node   # fill in BINDMANAGER_API_URL / _API_KEY
