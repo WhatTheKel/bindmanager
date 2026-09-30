@@ -183,6 +183,9 @@ docker compose exec web python manage.py createsuperuser
 | `http://<host>:81/api/token/` | Obtain JWT token (POST) |
 | `http://<host>:81/admin/` | Django admin panel (`is_superuser` only) |
 
+The footer of every page after login shows the running version (e.g.
+`v0.2.0`), read from the `VERSION` file — see [Versioning](#versioning).
+
 ---
 
 ## Project Structure
@@ -192,7 +195,7 @@ bindmanager/
 ├── apps/
 │   ├── accounts/               # Auth: SmartLoginView, login/logout signals, SSO backends
 │   │   ├── backends.py         # AuthentikOpenIdConnect — OIDC backend for Authentik
-│   │   ├── context_processors.py  # Injects SSO flags + branding vars (logo, favicon, app name) into all templates
+│   │   ├── context_processors.py  # Injects SSO flags, branding vars (logo, favicon, app name) and APP_VERSION into all templates
 │   │   ├── pipeline.py         # set_staff_flag — grants is_staff to new SSO users
 │   │   ├── signals.py          # Writes AuditLog on login / logout / failed login
 │   │   └── views.py            # SmartLoginView — rate-limited login, redirects staff to /dashboard/
@@ -227,7 +230,7 @@ bindmanager/
 ├── config/
 │   ├── __init__.py             # celery_app export + optional PyMySQL shim (no-op — mysqlclient is the driver)
 │   ├── settings/
-│   │   ├── base.py             # Core settings (used by all environments)
+│   │   ├── base.py             # Core settings (used by all environments); reads VERSION into APP_VERSION
 │   │   ├── development.py
 │   │   ├── production.py       # HSTS, secure cookies
 │   │   └── test.py             # SQLite :memory: for pytest
@@ -243,7 +246,7 @@ bindmanager/
 │   │   ├── js/app.js           # Delete modal, toasts, live search, user menu, progress bar; GSAP-driven motion
 │   │   └── js/theme.js         # Theme toggle, persists to localStorage; GSAP icon crossfade
 │   └── templates/
-│       ├── base.html           # App shell: topbar, nav, toasts, delete modal
+│       ├── base.html           # App shell: topbar, nav, footer (with version), toasts, delete modal
 │       ├── dashboard.html      # Staff dashboard (standalone, no sidebar)
 │       ├── registration/
 │       │   └── login.html      # Custom split-panel login page
@@ -269,12 +272,15 @@ bindmanager/
 │   ├── test_template_tags.py   # rtype_class, url_replace (21 tests)
 │   ├── test_models.py          # Zone, Record, AuditLog, NameServer (12 tests)
 │   ├── test_agent_api.py       # NameServer API key + pull-agent endpoints + agent rate limit (14 tests)
-│   └── test_validators.py      # Record value, CNAME-conflict and duplicate validation (form + API) + named-checkzone error text (49 tests)
+│   ├── test_validators.py      # Record value, CNAME-conflict and duplicate validation (form + API) + named-checkzone error text (49 tests)
+│   └── test_version.py         # VERSION file → APP_VERSION → template context (2 tests)
 ├── pytest.ini
 ├── nginx/nginx.conf
 ├── docker/mysql/init.sql       # One-time MySQL database + user creation
 ├── bind_zones/                 # Generated BIND zone files (host-mounted volume)
 ├── staticfiles/                # collectstatic output (host-mounted volume, shared by web + nginx)
+├── VERSION                     # App version shown in the footer (MAJOR.MINOR.PATCH)
+├── UPDATING.md                 # How to update an install + how to release a version
 ├── Dockerfile
 ├── docker-compose.yml
 ├── .env.example
@@ -477,7 +483,7 @@ BindManager is designed to be sold and deployed under a customer's own brand. Th
 
 | Variable / File | Where it appears |
 |---|---|
-| `BRANDING_APP_NAME` | Browser tab title, login page heading, login page subtitle, footer (topbar always shows "DNS Manager") |
+| `BRANDING_APP_NAME` | Browser tab title, login page heading, login page subtitle, footer (topbar always shows "DNS Manager"; the footer also shows the version from `VERSION`) |
 | Logo file / `BRANDING_LOGO_URL` | Topbar (next to app name), login page |
 | Favicon file / `BRANDING_FAVICON_URL` | Browser tab icon |
 
@@ -569,6 +575,24 @@ docker compose restart nginx     # otherwise nginx may serve 502s after the rebu
 
 Database migrations and `collectstatic` run automatically when `web`
 starts. Nameservers only need updating when a release changes `agents/`.
+Afterwards, the page footer should show the new version.
+
+### Versioning
+
+The app version lives in the one-line `VERSION` file at the top of the repo
+(`MAJOR.MINOR.PATCH`). Django reads it at startup into `APP_VERSION`, and
+every page's footer shows it (after login — not on the login page). Each
+release is also a git tag (`v0.2.0`, …).
+
+- **Which version am I running?** Look at the footer, or `cat VERSION` in
+  the checkout. `git show origin/main:VERSION` (after `git fetch`) shows the
+  latest.
+- **Releasing:** bump `VERSION` (patch = fixes, minor = features, major =
+  needs manual steps), commit, then `git tag -a vX.Y.Z -m "vX.Y.Z"` and
+  `git push && git push --tags`. Details in
+  [`UPDATING.md`](UPDATING.md#releasing-a-new-version-maintainers).
+- The version covers the app only. The nameserver agent has no version of
+  its own; UPDATING.md checks whether it changed with `cmp`.
 
 ---
 

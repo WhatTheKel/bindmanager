@@ -432,7 +432,8 @@ See [`UPDATING.md`](UPDATING.md). In short: on this server, `cd <your checkout> 
 git pull && docker compose up -d --build && docker compose restart nginx`.
 If the update changed `agents/`, also copy the new
 `agents/bindmanager_agent.py` to `/opt/bindmanager-agent/` (UPDATING.md
-Part 2.4). Back up the database first if the update includes migrations.
+Part 2.4). Back up the database first if the update includes migrations. Afterwards
+the page footer shows the new version (compare with `cat VERSION`).
 
 ---
 

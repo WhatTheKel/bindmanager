@@ -166,7 +166,8 @@ Full version with rollback: [`UPDATING.md`](UPDATING.md).
 # App host (your checkout from section A)
 cd bindmanager
 mkdir -p /root/backups
-git fetch && git diff --stat HEAD origin/main -- '*/migrations/*' .env.example agents/
+git fetch && cat VERSION && git show origin/main:VERSION   # current → latest
+git diff --stat HEAD origin/main -- '*/migrations/*' .env.example agents/
 mysqldump -u root --single-transaction --routines bindmanager | gzip > /root/backups/bindmanager-$(date +%Y%m%d-%H%M%S).sql.gz
 git pull
 docker compose up -d --build && docker compose restart nginx
@@ -176,7 +177,7 @@ cd /root/bindmanager && git pull
 cmp agents/bindmanager_agent.py /opt/bindmanager-agent/bindmanager_agent.py || \cp -f agents/bindmanager_agent.py /opt/bindmanager-agent/
 ```
 
-☐ login page loads (no 502) ☐ an edited zone syncs within ~2 min
+☐ login page loads (no 502) ☐ footer shows the new version ☐ an edited zone syncs within ~2 min
 
 ---
 

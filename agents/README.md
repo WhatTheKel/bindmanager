@@ -60,7 +60,9 @@ only the zones assigned to it, validating, and reloading locally.
 
 ## Updating
 
-Only needed when a BindManager update changes `agents/`. Copy the new
+Only needed when a BindManager update changes `agents/` — check with
+`git fetch && git diff --stat HEAD origin/main -- agents/` (the app version
+in the footer doesn't tell you; the agent has no version number). Copy the new
 `bindmanager_agent.py` over the old one — no restart, the next timer/cron
 run picks it up. Leave `config.ini` alone (add any new settings from
 `config.example.ini` by hand). If you re-copy the systemd unit, re-apply

@@ -31,7 +31,7 @@ git fetch
 cat VERSION; git show origin/main:VERSION         # your version, then the latest
 git log --oneline HEAD..origin/main              # the new commits (empty = already up to date)
 git diff --stat HEAD origin/main                 # which files change
-git diff --stat HEAD origin/main -- '*/migrations/*' .env.example agents/
+git diff --stat HEAD origin/main -- '*/migrations/*' .env.example agents/ docker/bind9-* docker-compose.*.yml
 ```
 
 The last line tells you what needs extra attention:
@@ -41,6 +41,7 @@ The last line tells you what needs extra attention:
 | `…/migrations/…` | The database structure changes. It's applied automatically when `web` starts, but **take the backup in 0.3** — you can't undo it without one |
 | `.env.example` | A setting was added or changed. See step 1.2 |
 | `agents/…` | The nameserver agent changed. Do Part 2 on every nameserver after the app is updated |
+| `docker/bind9-…` or `docker-compose.agent.yml` / `.node.yml` | Only matters for Docker-based nameservers (Part 2.2 / 2.3) |
 
 ### 0.2 Check for local edits
 
@@ -130,7 +131,9 @@ survived the update.
 
 ## Part 2 — Update each nameserver's agent
 
-**Skip this entirely if 0.1 listed nothing under `agents/`.** The agent talks
+**Skip this entirely if 0.1 listed nothing under `agents/`** (or, for Docker
+nameservers, `docker/bind9-…` and their compose file). The version number
+in the footer is the app's; it doesn't tell you whether the agent changed. The agent talks
 to a stable API, so app-only updates never require touching nameservers.
 
 Pick the section that matches how that nameserver was installed.

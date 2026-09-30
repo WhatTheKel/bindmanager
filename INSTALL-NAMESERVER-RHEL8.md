@@ -401,7 +401,10 @@ agent/API issues that aren't OS-specific (401s, 404s, empty zone lists).
 ## Updating the agent later
 
 Most BindManager updates only touch the app host and need nothing here.
-Only when an update changes `agents/`:
+The version in the app's footer is the app's version; it doesn't say
+whether the agent changed. Check that directly —
+`git fetch && git diff --stat HEAD origin/main -- agents/` in
+`/root/bindmanager` (empty = nothing to do). Only when it lists files:
 
 ```bash
 cd /root/bindmanager && git pull

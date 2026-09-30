@@ -94,6 +94,15 @@ from reading them. On RHEL, run the agent on bare metal instead
 
 ## Updating
 
+Only needed when a BindManager update changes `agents/` or this
+directory — the app's version number doesn't track the agent. Check first:
+
+```bash
+git fetch && git diff --stat HEAD origin/main -- agents/ docker/bind9-agent/ docker-compose.agent.yml
+```
+
+If it lists anything:
+
 ```bash
 git pull
 docker compose -f docker-compose.agent.yml up -d --build

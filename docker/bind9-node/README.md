@@ -70,6 +70,15 @@ no `controls{}` block and no port ever exposed past `127.0.0.1`.
 
 ## Updating
 
+Only needed when a BindManager update changes `agents/` or this
+directory — the app's version number doesn't track the agent. Check first:
+
+```bash
+git fetch && git diff --stat HEAD origin/main -- agents/ docker/bind9-node/ docker-compose.node.yml
+```
+
+If it lists anything:
+
 ```bash
 git pull
 docker compose -f docker-compose.node.yml up -d --build
