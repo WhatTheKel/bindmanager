@@ -240,9 +240,10 @@ tr:hover td { background: var(--surface-2); }
 
 .icon-sun, .icon-moon { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
-[data-theme="dark"]  .icon-sun  { display: none; }
-[data-theme="light"] .icon-moon { display: none; }
-:root:not([data-theme]) .icon-moon { display: none; }
+/* The toggle shows the theme it switches *to*: moon in light, sun in dark */
+[data-theme="dark"]  .icon-moon { display: none; }
+[data-theme="light"] .icon-sun  { display: none; }
+:root:not([data-theme]) .icon-sun { display: none; }
 
 /* ── Stats row ───────────────────────────────────────────────── */
 .stats-row { display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }

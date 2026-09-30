@@ -3,9 +3,18 @@
   function getStored() { try { return localStorage.getItem('theme'); } catch (_) { return null; } }
   function setStored(t)  { try { localStorage.setItem('theme', t); } catch (_) {} }
 
+  function label(theme) {
+    var btn = document.getElementById('theme-toggle');
+    if (!btn) return;
+    var text = theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme';
+    btn.setAttribute('aria-label', text);
+    btn.setAttribute('title', text);
+  }
+
   function apply(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     setStored(theme);
+    label(theme);
   }
 
   /* Apply on load (also handled inline in <head> to prevent flash) */
@@ -16,6 +25,7 @@
   document.addEventListener('DOMContentLoaded', function () {
     var btn = document.getElementById('theme-toggle');
     if (!btn) return;
+    label(document.documentElement.getAttribute('data-theme'));
 
     btn.addEventListener('click', function () {
       var current = document.documentElement.getAttribute('data-theme');
@@ -26,7 +36,8 @@
 
       if (!window.gsap || !sun || !moon) { apply(next); return; }
 
-      var showing = current === 'dark' ? moon : sun;
+      // The icon shown is the target theme: sun while dark, moon while light
+      var showing = current === 'dark' ? sun : moon;
       var hidden  = showing === moon ? sun : moon;
 
       gsap.killTweensOf([sun, moon]);
