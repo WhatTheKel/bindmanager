@@ -233,12 +233,16 @@ SOCIAL_AUTH_AUTHENTIK_KEY = config('AUTHENTIK_CLIENT_ID', default='')
 SOCIAL_AUTH_AUTHENTIK_SECRET = config('AUTHENTIK_CLIENT_SECRET', default='')
 SOCIAL_AUTH_AUTHENTIK_OIDC_ENDPOINT = config('AUTHENTIK_OIDC_ENDPOINT', default='')
 
+# ignore_session_user: an SSO sign-in never links to whoever is already
+# logged in. associate_by_email is deliberately absent — matching on an email
+# the IdP reports would let an SSO account take over a local one (including
+# a superuser) with the same address.
 SOCIAL_AUTH_PIPELINE = (
+    'apps.accounts.pipeline.ignore_session_user',
     'social_core.pipeline.social_auth.social_details',
     'social_core.pipeline.social_auth.social_uid',
     'social_core.pipeline.social_auth.social_user',
     'social_core.pipeline.user.get_username',
-    'social_core.pipeline.social_auth.associate_by_email',
     'social_core.pipeline.user.create_user',
     'social_core.pipeline.social_auth.associate_user',
     'social_core.pipeline.social_auth.load_extra_data',

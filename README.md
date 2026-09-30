@@ -196,7 +196,7 @@ bindmanager/
 │   ├── accounts/               # Auth: SmartLoginView, login/logout signals, SSO backends
 │   │   ├── backends.py         # AuthentikOpenIdConnect — OIDC backend for Authentik
 │   │   ├── context_processors.py  # Injects SSO flags, branding vars (logo, favicon, app name) and APP_VERSION into all templates
-│   │   ├── pipeline.py         # set_staff_flag — grants is_staff to new SSO users
+│   │   ├── pipeline.py         # SSO pipeline: ignore_session_user (no linking to a logged-in account), set_staff_flag
 │   │   ├── signals.py          # Writes AuditLog on login / logout / failed login; superuser ⇒ staff
 │   │   └── views.py            # SmartLoginView — rate-limited login, redirects staff to /dashboard/
 │   ├── api/
@@ -273,6 +273,7 @@ bindmanager/
 │   ├── test_models.py          # Zone, Record, AuditLog, NameServer (12 tests)
 │   ├── test_agent_api.py       # NameServer API key + pull-agent endpoints + agent rate limit (14 tests)
 │   ├── test_validators.py      # Record value, CNAME-conflict and duplicate validation (form + API) + named-checkzone error text (49 tests)
+│   ├── test_sso_pipeline.py    # SSO never links to the session user or by email (4 tests)
 │   ├── test_superuser_staff.py # Superuser always saved as staff (4 tests)
 │   └── test_version.py         # VERSION file → APP_VERSION → template context (2 tests)
 ├── pytest.ini
@@ -433,7 +434,7 @@ curl http://<host>:81/api/v1/zones/ \
 ## Running Tests
 
 ```bash
-# All tests (154 total)
+# All tests (158 total)
 pytest
 
 # One module
@@ -525,7 +526,9 @@ Env-var URLs take priority over volume files. The `branding/` folder ships with 
 
 ## SSO (Optional)
 
-SSO users are automatically created with `is_staff=True` (granting access to `/manage/` and `/dashboard/`). `is_superuser=True` can be granted via the User Manager page (`/manage/users/`) by an existing superuser. `/admin/` requires `is_superuser=True`.
+SSO users are automatically created with `is_staff=True` (granting access to `/manage/` and `/dashboard/`). `is_superuser=True` can be granted via the User Manager page (`/manage/users/`) by an existing superuser. `/admin/` requires `is_superuser=True`. A superuser is always saved as staff too.
+
+Each SSO identity gets its own account. It is never linked to an existing local account, whether by matching email or because someone was already logged in when the SSO sign-in completed. To give an SSO user more rights, edit their own account in **Manage → Users**.
 
 SSO is disabled by default. When enabled, a branded **"Continue with Okta / Authentik"** button appears on the login page. To enable, set the relevant vars in `.env`:
 
