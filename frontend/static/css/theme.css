@@ -282,6 +282,7 @@ tr:hover td { background: var(--surface-2); }
   color: var(--text-muted);
   font-size: .85rem;
   margin-bottom: 1.25rem;
+  min-height: 28px;
 }
 .back-link:hover { color: var(--text); text-decoration: none; }
 
@@ -465,7 +466,9 @@ tr:hover td { background: var(--surface-2); }
   font-size: .875rem;
   cursor: pointer;
 }
-.checkbox-list input[type="checkbox"] { accent-color: var(--primary); width: 15px; height: 15px; }
+/* All checkboxes: larger box; the wrapping label is the full-size tap target */
+input[type="checkbox"] { accent-color: var(--primary); width: 18px; height: 18px; flex-shrink: 0; }
+label:has(> input[type="checkbox"]) { min-height: 32px; }
 
 /* ── Footer ──────────────────────────────────────────────────── */
 .footer {
@@ -630,8 +633,13 @@ tr:hover td { background: var(--surface-2); }
 .stat-card:hover .stat-icon { opacity: .28; }
 
 /* ── Layout utilities ────────────────────────────────────────── */
-.page-content { max-width: 1100px; margin: 2rem auto; padding: 0 1.25rem; }
+/* Kept as a hook; width and padding come from .page so every page lines up */
+.page-content { }
 .grid-2col    { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+.align-start  { align-items: start; }
+/* Grid items default to min-width:auto, so a wide table inside would
+   stretch the column past the screen instead of scrolling in its card */
+.grid-2col > *, .grid-3col > * { min-width: 0; }
 .grid-3col    { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.25rem; }
 .flex-row     { display: flex; align-items: center; gap: .6rem; }
 .flex-wrap    { flex-wrap: wrap; }
@@ -705,4 +713,63 @@ th {
 [data-theme="dark"] .form-select,
 [data-theme="dark"] .form-textarea {
   background: rgba(15, 23, 42, 0.45);
+}
+
+
+/* ── Small tap targets ────────────────────────────────────────── */
+.breadcrumbs a { display: inline-block; padding: .2rem 0; }
+.footer a { display: inline-block; padding: .3rem .15rem; }
+
+/* ── Tables: pin the Actions column when the table scrolls ────────
+   app.js adds .is-scrollable to a .table-wrap whose table is wider than
+   the card, so Edit/Delete stay visible and the shadow hints at more. */
+.table-wrap.is-scrollable .table-actions th:last-child,
+.table-wrap.is-scrollable .table-actions td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: rgba(255, 255, 255, .9);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: -10px 0 10px -10px rgba(15, 23, 42, .35);
+}
+[data-theme="dark"] .table-wrap.is-scrollable .table-actions th:last-child,
+[data-theme="dark"] .table-wrap.is-scrollable .table-actions td:last-child {
+  background: rgba(15, 23, 42, .92);
+  box-shadow: -10px 0 10px -10px rgba(0, 0, 0, .7);
+}
+
+/* ── Phones and small tablets ─────────────────────────────────── */
+@media (max-width: 768px) {
+  /* Top bar: brand + user menu on the first row, nav links on a
+     second row that scrolls sideways if it has to */
+  .topbar { flex-wrap: wrap; height: auto; padding: .5rem 1rem 0; gap: .25rem .5rem; }
+  .topbar-brand { order: 1; flex: 1; min-width: 0; white-space: nowrap; }
+  .topbar-right { order: 2; }
+  .topbar-nav {
+    order: 3; flex: 1 0 100%;
+    overflow-x: auto; scrollbar-width: none;
+    margin: 0 -1rem; padding: .25rem 1rem .5rem;
+  }
+  .topbar-nav::-webkit-scrollbar { display: none; }
+  .nav-link { white-space: nowrap; padding: .45rem .75rem; }
+  .user-menu-trigger > span { display: none; }   /* avatar only */
+
+  .page { padding: 1.25rem 1rem; }
+
+  /* Manage: side menu becomes a row of tabs above the content */
+  .manage-wrap { flex-direction: column; align-items: stretch; gap: 1rem; }
+  .manage-sidebar {
+    width: auto; position: static;
+    display: flex; gap: .25rem; padding: .35rem;
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .manage-sidebar::-webkit-scrollbar { display: none; }
+  .sidebar-label, .sidebar-divider { display: none; }
+  .sidebar-link { border-left: 0; border-radius: 6px; white-space: nowrap; padding: .5rem .75rem; }
+
+  .grid-2col, .grid-3col { grid-template-columns: 1fr; }
+  .page-header { flex-wrap: wrap; gap: .75rem; }
+  .stat-card { min-width: calc(50% - .5rem); }
+  .stat-icon { display: none; }   /* decorative; collides with labels when narrow */
 }

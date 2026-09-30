@@ -26,6 +26,7 @@
       font-size: 14px;
       background: var(--bg);
       color: var(--text);
+      overflow-x: hidden;
     }
 
     /* ── Brand panel (left) ─────────────────────────────────── */
@@ -234,10 +235,11 @@
     /* Password toggle */
     .input-icon-right {
       position: absolute;
-      right: .75rem; top: 50%; transform: translateY(-50%);
+      right: .4rem; top: 50%; transform: translateY(-50%);
       background: none; border: none; cursor: pointer;
-      color: var(--text-muted); padding: .2rem;
-      display: flex; align-items: center;
+      color: var(--text-muted); padding: 0;
+      width: 32px; height: 32px;
+      display: flex; align-items: center; justify-content: center;
       border-radius: 4px;
       transition: color .15s;
     }

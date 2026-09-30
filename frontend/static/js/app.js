@@ -169,6 +169,16 @@
       });
     }
 
+    /* ── Scrollable tables: flag them so the Actions column pins ── */
+    var wraps = $$('.table-wrap');
+    function markScrollable() {
+      wraps.forEach(function (w) { w.classList.toggle('is-scrollable', w.scrollWidth > w.clientWidth + 1); });
+    }
+    if (wraps.length) {
+      markScrollable();
+      window.addEventListener('resize', markScrollable);
+    }
+
     /* ── Table row stagger-in ──────────────────────────────── */
     if (animate) {
       $$('.table-wrap tbody').forEach(function (tbody) {
