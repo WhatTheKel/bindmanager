@@ -398,6 +398,23 @@ agent/API issues that aren't OS-specific (401s, 404s, empty zone lists).
 
 ---
 
+## Updating the agent later
+
+Most BindManager updates only touch the app host and need nothing here.
+Only when an update changes `agents/`:
+
+```bash
+cd /root/bindmanager && git pull
+cmp agents/bindmanager_agent.py /opt/bindmanager-agent/bindmanager_agent.py \
+  || \cp -f agents/bindmanager_agent.py /opt/bindmanager-agent/
+```
+
+No restart needed — the timer's next run uses the new file. If the systemd
+unit files changed too, re-copy them and **re-run the `python3.9` sed from
+4.2**. Full details: [`UPDATING.md`](UPDATING.md) Part 2.
+
+---
+
 ## Security checklist
 
 - [ ] `recursion no;` — this server is not an open resolver

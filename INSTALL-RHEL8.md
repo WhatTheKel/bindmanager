@@ -343,6 +343,16 @@ App-side problems specific to a RHEL host:
 
 ---
 
+## Updating later
+
+See [`UPDATING.md`](UPDATING.md). In short: on this server, `cd /opt/bindmanager &&
+git pull && docker compose up -d --build && docker compose restart nginx`.
+If the update changed `agents/`, also copy the new
+`agents/bindmanager_agent.py` to `/opt/bindmanager-agent/` (UPDATING.md
+Part 2.4). Back up the database first if the update includes migrations.
+
+---
+
 ## Adding more nameservers later
 
 Nothing here needs redoing. For each new RHEL 8 box, follow

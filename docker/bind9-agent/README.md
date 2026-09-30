@@ -92,6 +92,16 @@ relabel those paths for container access, which in turn stops `named`
 from reading them. On RHEL, run the agent on bare metal instead
 ([`INSTALL-NAMESERVER-RHEL8.md`](../../INSTALL-NAMESERVER-RHEL8.md)) — it needs nothing extra.
 
+## Updating
+
+```bash
+git pull
+docker compose -f docker-compose.agent.yml up -d --build
+```
+
+`.env.agent` isn't in git, so it's kept. BIND on the host keeps answering
+throughout. See [`UPDATING.md`](../../UPDATING.md) Part 2.
+
 ## Keeping `bindmanager_agent.py` in sync
 
 Same caveat as `docker/bind9-node/`: this directory keeps its own copy of

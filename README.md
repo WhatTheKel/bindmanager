@@ -20,13 +20,15 @@ you're setting up:
 | Understand or configure the pull agent itself | [`agents/README.md`](agents/README.md) |
 | Run a nameserver as a Docker container (BIND + agent together) | [`docker/bind9-node/README.md`](docker/bind9-node/README.md) |
 | Keep BIND on the host but run only the agent in Docker | [`docker/bind9-agent/README.md`](docker/bind9-agent/README.md) |
+| Update an existing install to the latest code | [`UPDATING.md`](UPDATING.md) — app host rebuild, nameserver agents, rollback |
 | Look up app features, REST API, config, branding, SSO | This README (below) |
 
 **New here?** Start with `INSTALL-RHEL8.md` or `INSTALL-DEBIAN.md`
 (whichever matches your OS) — you end with one working server. Add more
 nameservers later with `INSTALL-NAMESERVER-RHEL8.md` (RHEL) or the
 "Scaling beyond one server" section of `INSTALL-DEBIAN.md`. Once you've
-done it once, `INSTALL-CHECKLIST.md` is all you need next time.
+done it once, `INSTALL-CHECKLIST.md` is all you need next time. To pick up
+new versions later, follow `UPDATING.md`.
 
 ---
 
@@ -217,7 +219,7 @@ bindmanager/
 │       ├── templatetags/
 │       │   └── dns_tags.py     # rtype_class filter + url_replace tag
 │       ├── urls.py             # All URL patterns
-│       ├── validators.py       # validate_record_value — per-type record value checks (UI, admin, API)
+│       ├── validators.py       # Record value checks + same-name conflict/duplicate checks (UI, admin, API)
 │       ├── views.py            # Public read-only zone/record views
 │       └── zone_engine/
 │           ├── generator.py    # Builds BIND zone file content via Jinja2
@@ -267,7 +269,7 @@ bindmanager/
 │   ├── test_template_tags.py   # rtype_class, url_replace (21 tests)
 │   ├── test_models.py          # Zone, Record, AuditLog, NameServer (12 tests)
 │   ├── test_agent_api.py       # NameServer API key + pull-agent endpoints + agent rate limit (14 tests)
-│   └── test_validators.py      # Record value validation (form + API) + named-checkzone error text (32 tests)
+│   └── test_validators.py      # Record value, CNAME-conflict and duplicate validation (form + API) + named-checkzone error text (49 tests)
 ├── pytest.ini
 ├── nginx/nginx.conf
 ├── docker/mysql/init.sql       # One-time MySQL database + user creation
@@ -314,7 +316,7 @@ Any record or zone change automatically sets `is_dirty = True`. The Celery Beat 
 5. Clears the dirty flag and writes an audit log entry
 6. Retries up to 3 times (30-second delay) if anything fails — the worker log and the audit log show `named-checkzone`'s actual reason
 
-**Record validation on save:** the Manage UI, Django admin and REST API all reject record values that can never be valid, before they reach the sync pipeline — `A`/`AAAA` values must be real IPv4/IPv6 addresses, and `NS`/`CNAME`/`PTR`/`MX` values must be hostnames, not IPs (an IP there is almost always a mistyped `A` record). Everything else is still validated by `named-checkzone` at sync time.
+**Record validation on save:** the Manage UI, Django admin and REST API all reject record values that can never be valid, before they reach the sync pipeline — `A`/`AAAA` values must be real IPv4/IPv6 addresses, and `NS`/`CNAME`/`PTR`/`MX` values must be hostnames, not IPs (an IP there is almost always a mistyped `A` record). They also reject a CNAME at a name that has other records (or at the zone apex), any record at a name that is already a CNAME, and exact duplicates of an existing record. Several `A`/`AAAA` records with the same name are fine — that's how a name returns multiple IPs (BIND rotates the order between answers). Inactive records are ignored by these checks, since they aren't written to the zone file. Everything else is still validated by `named-checkzone` at sync time.
 
 **Zone contents you don't enter yourself:** each zone's `NS` records come from its assigned nameservers (their `name` field), and the SOA primary is the first assigned nameserver. If that name is inside the zone (e.g. `ns1.example.com` for `example.com`), add an `A` record for it — `named-checkzone` rejects the zone without that glue.
 
@@ -424,7 +426,7 @@ curl http://<host>:81/api/v1/zones/ \
 ## Running Tests
 
 ```bash
-# All tests (131 total)
+# All tests (148 total)
 pytest
 
 # One module
@@ -551,6 +553,22 @@ When creating the OAuth2/OpenID provider in Authentik:
    - Example (prod): `https://dns.example.com/auth/complete/authentik/`
    - The redirect URI field is a tag input — type the URI then press **Enter** to confirm it as a chip before saving, otherwise Authentik silently discards it
 3. **Signing Key:** Under *Advanced protocol settings*, assign a signing key (e.g. `authentik Self-signed Certificate`). Without this the JWKS endpoint returns `{}` and login fails with a `KeyError: 'keys'` error.
+
+---
+
+## Updating
+
+Full steps, including backups, nameserver agents and rollback, are in
+[`UPDATING.md`](UPDATING.md). The short version, on the app host:
+
+```bash
+git pull
+docker compose up -d --build
+docker compose restart nginx     # otherwise nginx may serve 502s after the rebuild
+```
+
+Database migrations and `collectstatic` run automatically when `web`
+starts. Nameservers only need updating when a release changes `agents/`.
 
 ---
 

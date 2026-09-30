@@ -68,6 +68,17 @@ nothing to share: Debian's `bind9` package auto-generates
 `/etc/bind/rndc.key` at install time and both sides use it implicitly, with
 no `controls{}` block and no port ever exposed past `127.0.0.1`.
 
+## Updating
+
+```bash
+git pull
+docker compose -f docker-compose.node.yml up -d --build
+```
+
+`.env.node` isn't in git, so it's kept. This restarts BIND, so the node
+stops answering for a few seconds — with several nodes, update one at a
+time. See [`UPDATING.md`](../../UPDATING.md) Part 2.
+
 ## Keeping `bindmanager_agent.py` in sync
 
 This directory has its own copy of the agent script (Docker can't `COPY`

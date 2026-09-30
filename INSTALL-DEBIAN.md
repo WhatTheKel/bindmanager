@@ -426,6 +426,16 @@ If all of that resolves, the full pipeline — UI → database → Celery sync
 
 ---
 
+## Updating later
+
+See [`UPDATING.md`](UPDATING.md). In short: on this server, `cd <your checkout> &&
+git pull && docker compose up -d --build && docker compose restart nginx`.
+If the update changed `agents/`, also copy the new
+`agents/bindmanager_agent.py` to `/opt/bindmanager-agent/` (UPDATING.md
+Part 2.4). Back up the database first if the update includes migrations.
+
+---
+
 ## Scaling beyond one server
 
 Everything above generalizes without any rework: create another

@@ -58,6 +58,15 @@ only the zones assigned to it, validating, and reloading locally.
   the local `.zone` file and drops it from the generated config include on
   the next run.
 
+## Updating
+
+Only needed when a BindManager update changes `agents/`. Copy the new
+`bindmanager_agent.py` over the old one — no restart, the next timer/cron
+run picks it up. Leave `config.ini` alone (add any new settings from
+`config.example.ini` by hand). If you re-copy the systemd unit, re-apply
+any `ExecStart` edit you made (e.g. `python3.9` on RHEL 8). See
+[`UPDATING.md`](../UPDATING.md) Part 2.
+
 ## Rotating a compromised key
 
 In the Django admin: `/admin/` > **Name servers** > tick the row > action
