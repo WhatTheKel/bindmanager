@@ -26,4 +26,5 @@ def sso_providers(request):
         'BRANDING_LOGO_URL':     logo_url,
         'BRANDING_FAVICON_URL':  favicon_url,
         'BRANDING_APP_NAME':     getattr(settings, 'BRANDING_APP_NAME', 'BindManager'),
+        'APP_VERSION':           getattr(settings, 'APP_VERSION', ''),
     }

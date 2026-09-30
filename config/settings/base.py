@@ -205,6 +205,13 @@ BRANDING_LOGO_URL    = config('BRANDING_LOGO_URL',    default='')
 BRANDING_FAVICON_URL = config('BRANDING_FAVICON_URL', default='')
 BRANDING_APP_NAME    = config('BRANDING_APP_NAME',    default='BindManager')
 
+# Shown in the page footer. Bump the VERSION file (and tag the commit) when
+# releasing; see UPDATING.md.
+try:
+    APP_VERSION = (BASE_DIR / 'VERSION').read_text().strip()
+except OSError:
+    APP_VERSION = ''
+
 # SSO feature flags — explicit opt-in; backends are not registered unless enabled
 OKTA_SSO_ENABLED = config('OKTA_ENABLED', default=False, cast=bool)
 AUTHENTIK_SSO_ENABLED = config('AUTHENTIK_ENABLED', default=False, cast=bool)

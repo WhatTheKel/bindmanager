@@ -101,7 +101,7 @@
 </main>
 
 <footer class="footer">
-  {{ BRANDING_APP_NAME }} &mdash; BIND DNS Management &bull; {% now "Y" %}{% if user.is_superuser %} &bull;
+  {{ BRANDING_APP_NAME }} &mdash; BIND DNS Management{% if APP_VERSION %} &bull; v{{ APP_VERSION }}{% endif %} &bull; {% now "Y" %}{% if user.is_superuser %} &bull;
   <a href="/api/v1/">REST API</a>{% endif %}
 </footer>
 

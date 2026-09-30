@@ -426,7 +426,7 @@ curl http://<host>:81/api/v1/zones/ \
 ## Running Tests
 
 ```bash
-# All tests (148 total)
+# All tests (150 total)
 pytest
 
 # One module

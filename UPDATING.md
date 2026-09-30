@@ -28,6 +28,7 @@ you actually cloned it.
 ```bash
 cd /opt/bindmanager
 git fetch
+cat VERSION; git show origin/main:VERSION         # your version, then the latest
 git log --oneline HEAD..origin/main              # the new commits (empty = already up to date)
 git diff --stat HEAD origin/main                 # which files change
 git diff --stat HEAD origin/main -- '*/migrations/*' .env.example agents/
@@ -120,7 +121,8 @@ curl -s -o /dev/null -w '%{http_code}\n' http://localhost:81/accounts/login/   #
 docker compose logs --since 5m worker | grep -iE 'error|traceback'
 ```
 
-Then log in and open a zone. Within a couple of minutes of an edit, the zone
+Then log in: the page footer shows the version (`vX.Y.Z`), which should now
+match `cat VERSION`. Open a zone. Within a couple of minutes of an edit, the zone
 should stop showing as unsynced — that confirms the worker and sync schedule
 survived the update.
 
@@ -249,6 +251,27 @@ Part 1 again.
 | `web` keeps restarting; logs show a migration error | Read the error in `docker compose logs web`. Don't loop restarts — roll back (restore the backup, check out the old commit) and report the error |
 | Zones stay unsynced after the update | `docker compose logs worker` for errors; check the "Sync dirty zones" periodic task is still enabled in `/admin/` → **Periodic tasks** |
 | Nameserver agent logs `401` after an update | The app didn't change keys on update — check `api_key` in `config.ini` still matches the nameserver's key in **Manage > Nameservers** |
+
+---
+
+## Releasing a new version (maintainers)
+
+The version shown in the page footer comes from the `VERSION` file at the
+top of the repo. When pushing changes that users should pick up:
+
+1. Bump `VERSION` — `MAJOR.MINOR.PATCH`: patch for fixes, minor for new
+   features, major for changes that need manual steps (new required `.env`
+   settings, agent changes that must be rolled out together with the app).
+2. Commit it with the changes, then tag and push the tag:
+
+   ```bash
+   git tag -a v0.2.0 -m "v0.2.0"
+   git push && git push --tags
+   ```
+
+Users can then see what they run in the footer and compare with
+`git show origin/main:VERSION`. Nothing breaks if you forget to bump it — the
+footer just shows the old number.
 
 ---
 
