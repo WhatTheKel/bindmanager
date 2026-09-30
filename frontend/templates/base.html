@@ -60,7 +60,11 @@
         <div class="user-menu-header">
           <strong>{{ user.username }}</strong>
           {% if user.email %}<span>{{ user.email }}</span>{% endif %}
-          {% if user.is_staff %}<span style="margin-top:.3rem;display:block"><span class="badge badge-blue" style="font-size:.65rem">Staff</span></span>{% endif %}
+          <span style="margin-top:.3rem;display:block">
+            {% if user.is_superuser %}<span class="badge badge-amber" style="font-size:.65rem">Superuser</span>
+            {% elif user.is_staff %}<span class="badge badge-blue" style="font-size:.65rem">Staff</span>
+            {% else %}<span class="badge badge-neutral" style="font-size:.65rem">User</span>{% endif %}
+          </span>
         </div>
         <form method="post" action="{% url 'logout' %}">
           {% csrf_token %}

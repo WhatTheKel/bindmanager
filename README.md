@@ -270,6 +270,7 @@ bindmanager/
 │   ├── test_generator.py       # Zone engine: _bump_serial, _quote_txt, build_zone (31 tests)
 │   ├── test_permissions.py     # IsStaffOrReadOnly (21 tests)
 │   ├── test_template_tags.py   # rtype_class, url_replace (21 tests)
+│   ├── test_user_menu_role.py  # User-menu role badge: Superuser / Staff / User (3 tests)
 │   ├── test_models.py          # Zone, Record, AuditLog, NameServer (12 tests)
 │   ├── test_agent_api.py       # NameServer API key + pull-agent endpoints + agent rate limit (14 tests)
 │   ├── test_validators.py      # Record value, CNAME-conflict and duplicate validation (form + API) + named-checkzone error text (49 tests)
@@ -434,7 +435,7 @@ curl http://<host>:81/api/v1/zones/ \
 ## Running Tests
 
 ```bash
-# All tests (158 total)
+# All tests (161 total)
 pytest
 
 # One module
