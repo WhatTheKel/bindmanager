@@ -5,6 +5,12 @@
   function $  (sel, ctx) { return (ctx || document).querySelector(sel); }
   function $$ (sel, ctx) { return Array.from((ctx || document).querySelectorAll(sel)); }
 
+  /* Decorative motion (modal pop, toast slide, count-up, row stagger, pulse)
+     is skipped when the OS asks for reduced motion; things then just appear.
+     The navigation progress bar stays: it's loading feedback, not decoration. */
+  var animate = !!window.gsap &&
+    !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
   /* ── Progress bar on navigation ───────────────────────────── */
   var bar = $('#progress-bar');
   if (bar && window.gsap) {
@@ -39,7 +45,7 @@
       modalForm.action = url;
       modal.style.display = 'flex';
       modalOpen = true;
-      if (window.gsap) {
+      if (animate) {
         gsap.fromTo(modal,    { opacity: 0 }, { opacity: 1, duration: .15 });
         gsap.fromTo(modalBox, { opacity: 0, y: 12, scale: .96 },
                                { opacity: 1, y: 0, scale: 1, duration: .22, ease: 'back.out(1.7)' });
@@ -50,7 +56,7 @@
     function closeDelete() {
       if (!modalOpen) return;
       modalOpen = false;
-      if (window.gsap) {
+      if (animate) {
         gsap.to(modalBox, { opacity: 0, y: 8, scale: .96, duration: .15, ease: 'power1.in' });
         gsap.to(modal, {
           opacity: 0, duration: .15, delay: .03,
@@ -62,7 +68,7 @@
     }
 
     function shakeModal() {
-      if (!window.gsap || !modalBox) return;
+      if (!animate || !modalBox) return;
       gsap.fromTo(modalBox, { x: 0 },
         { x: 8, duration: .06, repeat: 5, yoyo: true, ease: 'power1.inOut', clearProps: 'x' });
     }
@@ -89,12 +95,12 @@
 
     /* ── Toast slide-in + auto-dismiss ─────────────────────── */
     $$('.toast').forEach(function (t) {
-      if (window.gsap) {
+      if (animate) {
         gsap.set(t, { maxHeight: t.offsetHeight });
         gsap.from(t, { x: 24, opacity: 0, duration: .3, ease: 'power2.out' });
       }
       setTimeout(function () {
-        if (!window.gsap) {
+        if (!animate) {
           if (t.parentNode) t.parentNode.removeChild(t);
           return;
         }
@@ -150,7 +156,7 @@
     }
 
     /* ── Stat card count-up ────────────────────────────────── */
-    if (window.gsap) {
+    if (animate) {
       $$('.stat-card .value').forEach(function (el) {
         var target = parseInt(el.textContent.replace(/[^\d-]/g, ''), 10);
         if (isNaN(target)) return;
@@ -164,7 +170,7 @@
     }
 
     /* ── Table row stagger-in ──────────────────────────────── */
-    if (window.gsap) {
+    if (animate) {
       $$('.table-wrap tbody').forEach(function (tbody) {
         var rows = $$('tr', tbody);
         if (!rows.length) return;
@@ -173,7 +179,7 @@
     }
 
     /* ── Pending-sync pulse ─────────────────────────────────── */
-    if (window.gsap) {
+    if (animate) {
       var pendingDots = $$('.dot-red');
       if (pendingDots.length) {
         gsap.to(pendingDots, {

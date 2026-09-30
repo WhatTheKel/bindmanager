@@ -155,6 +155,9 @@
       from { opacity: 0; transform: translateX(18px); }
       to   { opacity: 1; transform: translateX(0); }
     }
+    @media (prefers-reduced-motion: reduce) {
+      .form-panel { animation: none; }
+    }
 
     /* Theme toggle */
     .login-theme-btn {
