@@ -36,7 +36,9 @@ def _validate(zone_name: str, zone_file: Path) -> None:
         text=True,
     )
     if result.returncode != 0:
-        raise ValueError(f'named-checkzone failed for {zone_name}:\n{result.stderr}')
+        # named-checkzone reports its errors on stdout, not stderr.
+        output = (result.stdout + result.stderr).strip()
+        raise ValueError(f'named-checkzone failed for {zone_name}:\n{output}')
 
 
 def reload_zone(zone_name: str) -> None:

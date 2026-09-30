@@ -1,5 +1,7 @@
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 from apps.dns_manager.models import Zone, Record, NameServer, AuditLog
+from apps.dns_manager.validators import validate_record_value
 
 
 class NameServerSerializer(serializers.ModelSerializer):
@@ -18,6 +20,16 @@ class RecordSerializer(serializers.ModelSerializer):
             'ttl', 'value', 'priority', 'is_active', 'created_at',
         ]
         read_only_fields = ['created_at', 'zone_name']
+
+    def validate(self, attrs):
+        # PATCH may send only one of the two fields — fall back to the instance.
+        record_type = attrs.get('record_type', getattr(self.instance, 'record_type', None))
+        value = attrs.get('value', getattr(self.instance, 'value', None))
+        try:
+            validate_record_value(record_type, value)
+        except DjangoValidationError as e:
+            raise serializers.ValidationError({'value': e.messages})
+        return attrs
 
 
 # Lightweight serializer used in zone list — no nested records

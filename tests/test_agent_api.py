@@ -101,3 +101,31 @@ class TestAgentZoneDetail:
         _auth(api_client, nameserver)
         resp = api_client.get(reverse('agent-zone-detail', args=[zone.name]))
         assert resp.status_code == 404
+
+
+class TestAgentRateThrottle:
+    """The 'agent' rate must actually apply, counted per NameServer key."""
+
+    @pytest.fixture(autouse=True)
+    def low_rate(self):
+        from unittest.mock import patch
+        from django.core.cache import cache
+        from apps.api.v1.agent_views import AgentRateThrottle
+        cache.clear()
+        with patch.object(AgentRateThrottle, 'THROTTLE_RATES', {'agent': '2/minute'}):
+            yield
+        cache.clear()
+
+    def test_throttles_after_rate_exceeded(self, api_client, nameserver, zone):
+        _auth(api_client, nameserver)
+        url = reverse('agent-zone-list')
+        assert [api_client.get(url).status_code for _ in range(3)] == [200, 200, 429]
+
+    def test_each_nameserver_has_its_own_budget(self, api_client, nameserver, other_nameserver, zone):
+        url = reverse('agent-zone-list')
+        _auth(api_client, nameserver)
+        api_client.get(url)
+        api_client.get(url)
+        assert api_client.get(url).status_code == 429
+        _auth(api_client, other_nameserver)
+        assert api_client.get(url).status_code == 200

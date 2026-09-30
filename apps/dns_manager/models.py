@@ -1,7 +1,10 @@
 import secrets
 
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.contrib.auth.models import User
+
+from .validators import validate_record_value
 
 
 class NameServer(models.Model):
@@ -101,6 +104,14 @@ class Record(models.Model):
 
     def __str__(self):
         return f'{self.name} {self.record_type} {self.value}'
+
+    def clean(self):
+        # Runs for ModelForms (manage UI, Django admin); the API serializer
+        # calls validate_record_value itself.
+        try:
+            validate_record_value(self.record_type, self.value)
+        except ValidationError as e:
+            raise ValidationError({'value': e.messages})
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)

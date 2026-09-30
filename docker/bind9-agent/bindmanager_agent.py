@@ -142,7 +142,8 @@ def write_zone_file(cfg: Config, name: str, content: str) -> None:
             [cfg.checkzone_bin, name, str(tmp)], capture_output=True, text=True,
         )
         if result.returncode != 0:
-            raise RuntimeError(f'named-checkzone rejected {name}:\n{result.stderr}')
+            # named-checkzone/-checkconf report errors on stdout, not stderr
+            raise RuntimeError(f'named-checkzone rejected {name}:\n{result.stdout}{result.stderr}')
         tmp.replace(dest)
     finally:
         tmp.unlink(missing_ok=True)
@@ -174,7 +175,7 @@ def write_named_conf_include(cfg: Config, zones: list[dict]) -> None:
             [cfg.checkconf_bin, str(tmp)], capture_output=True, text=True,
         )
         if result.returncode != 0:
-            raise RuntimeError(f'named-checkconf rejected generated include:\n{result.stderr}')
+            raise RuntimeError(f'named-checkconf rejected generated include:\n{result.stdout}{result.stderr}')
         tmp.replace(cfg.named_conf_include)
     finally:
         tmp.unlink(missing_ok=True)

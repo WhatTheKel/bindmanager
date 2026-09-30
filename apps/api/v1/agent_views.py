@@ -7,8 +7,20 @@ from apps.dns_manager.zone_engine.generator import render_zone
 from .agent_auth import NameServerKeyAuthentication, IsNameServerAgent
 
 
-class AgentRateThrottle(throttling.ScopedRateThrottle):
+class AgentRateThrottle(throttling.SimpleRateThrottle):
+    """
+    'agent' rate from DEFAULT_THROTTLE_RATES, counted per NameServer.
+
+    Not ScopedRateThrottle: that reads the scope from the view's
+    `throttle_scope` and silently allows everything when it's unset. Agent
+    requests also have no Django user (request.user is AnonymousUser), so
+    the stock throttles would lump every agent behind one IP together.
+    """
     scope = 'agent'
+
+    def get_cache_key(self, request, view):
+        ident = getattr(request.auth, 'pk', None) or self.get_ident(request)
+        return self.cache_format % {'scope': self.scope, 'ident': ident}
 
 
 class AgentZoneListSerializer(serializers.ModelSerializer):
