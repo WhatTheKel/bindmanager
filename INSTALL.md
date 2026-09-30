@@ -358,6 +358,7 @@ VM's real address, not `localhost`). Three ways to do that, depending on
 what the new box looks like:
 
 - **Bare metal with BIND9 already there** — same as Part 4 above.
+- **RHEL 8 box, BIND not yet installed** — [`INSTALL-RHEL.md`](INSTALL-RHEL.md) (packages, SELinux, firewalld, Python 3.9 for the agent).
 - **Fresh box, nothing installed yet** — [`docker/bind9-node/README.md`](docker/bind9-node/README.md) bakes BIND9 + the agent into one container.
 - **BIND9 already there, but you want the agent containerized anyway** — [`docker/bind9-agent/README.md`](docker/bind9-agent/README.md).
 

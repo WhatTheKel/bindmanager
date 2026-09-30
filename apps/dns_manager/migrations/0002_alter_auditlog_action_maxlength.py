@@ -19,6 +19,10 @@ def _alter_reverse(apps, schema_editor):
 
 class Migration(migrations.Migration):
 
+    # MySQL can't roll back DDL, so Django refuses to run the ALTER inside the
+    # migration's transaction — without this, fresh MySQL installs fail here.
+    atomic = False
+
     dependencies = [
         ('dns_manager', '0001_initial'),
     ]
