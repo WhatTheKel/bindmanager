@@ -34,7 +34,8 @@
       var sun  = btn.querySelector('.icon-sun');
       var moon = btn.querySelector('.icon-moon');
 
-      if (!window.gsap || !sun || !moon) { apply(next); return; }
+      var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (!window.gsap || !sun || !moon || reduceMotion) { apply(next); return; }
 
       // The icon shown is the target theme: sun while dark, moon while light
       var showing = current === 'dark' ? sun : moon;
