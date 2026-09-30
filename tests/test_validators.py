@@ -99,6 +99,106 @@ class TestRecordSerializer:
         assert s.is_valid(), s.errors
 
 
+# ── Same-name conflicts and duplicates ───────────────────────────────────────
+
+@pytest.mark.django_db
+class TestRecordConflicts:
+    def _form(self, zone, instance=None, **data):
+        data.setdefault('is_active', True)
+        return RecordForm(data=data, instance=instance or Record(zone=zone))
+
+    def _add(self, zone, name, record_type, value, **kw):
+        return Record.objects.create(zone=zone, name=name, record_type=record_type,
+                                     value=value, **kw)
+
+    def test_multiple_a_records_allowed(self, zone):
+        self._add(zone, 'www', 'A', '192.0.2.10')
+        self._add(zone, 'www', 'A', '192.0.2.11')
+        assert self._form(zone, name='www', record_type='A', value='192.0.2.12').is_valid()
+
+    def test_exact_duplicate_rejected(self, zone):
+        self._add(zone, 'www', 'A', '192.0.2.10')
+        form = self._form(zone, name='WWW', record_type='A', value='192.0.2.10')
+        assert not form.is_valid()
+        assert 'value' in form.errors
+
+    def test_duplicate_matches_fqdn_name_and_ipv6_spelling(self, zone):
+        self._add(zone, 'www', 'AAAA', '2001:db8::1')
+        form = self._form(zone, name='www.example.com.', record_type='AAAA',
+                          value='2001:0db8:0:0::1')
+        assert not form.is_valid()
+
+    def test_mx_same_host_different_priority_allowed(self, zone):
+        self._add(zone, '@', 'MX', 'mail.example.com.', priority=10)
+        assert self._form(zone, name='@', record_type='MX',
+                          value='mail.example.com.', priority=20).is_valid()
+
+    def test_cname_rejected_when_name_has_other_records(self, zone):
+        self._add(zone, 'www', 'A', '192.0.2.10')
+        form = self._form(zone, name='www', record_type='CNAME', value='web.example.com.')
+        assert not form.is_valid()
+        assert 'name' in form.errors
+
+    def test_second_cname_rejected(self, zone):
+        self._add(zone, 'www', 'CNAME', 'web1.example.com.')
+        form = self._form(zone, name='www', record_type='CNAME', value='web2.example.com.')
+        assert not form.is_valid()
+        assert 'name' in form.errors
+
+    def test_other_record_rejected_when_name_is_cname(self, zone):
+        self._add(zone, 'www', 'CNAME', 'web.example.com.')
+        form = self._form(zone, name='www', record_type='TXT', value='hello')
+        assert not form.is_valid()
+        assert 'name' in form.errors
+
+    @pytest.mark.parametrize('name', ['@', '', 'example.com.'])
+    def test_cname_at_apex_rejected(self, zone, name):
+        form = self._form(zone, name=name, record_type='CNAME', value='other.example.net.')
+        assert not form.is_valid()
+
+    def test_inactive_records_ignored(self, zone):
+        self._add(zone, 'www', 'A', '192.0.2.10', is_active=False)
+        assert self._form(zone, name='www', record_type='CNAME',
+                          value='web.example.com.').is_valid()
+
+    def test_saving_inactive_record_skips_check(self, zone):
+        self._add(zone, 'www', 'A', '192.0.2.10')
+        assert self._form(zone, name='www', record_type='A', value='192.0.2.10',
+                          is_active=False).is_valid()
+
+    def test_editing_record_does_not_conflict_with_itself(self, zone):
+        rec = self._add(zone, 'www', 'CNAME', 'web.example.com.')
+        form = self._form(zone, instance=rec, name='www', record_type='CNAME',
+                          value='web2.example.com.')
+        assert form.is_valid(), form.errors
+
+    def test_other_zone_not_considered(self, zone):
+        from apps.dns_manager.models import Zone
+        other = Zone.objects.create(name='example.org', serial=1)
+        self._add(other, 'www', 'A', '192.0.2.10')
+        assert self._form(zone, name='www', record_type='CNAME',
+                          value='web.example.com.').is_valid()
+
+    def test_api_create_rejects_cname_conflict(self, zone):
+        self._add(zone, 'www', 'A', '192.0.2.10')
+        s = RecordSerializer(data={'zone': zone.pk, 'name': 'www',
+                                   'record_type': 'CNAME', 'value': 'web.example.com.'})
+        assert not s.is_valid()
+        assert 'name' in s.errors
+
+    def test_api_create_rejects_duplicate(self, zone):
+        self._add(zone, 'www', 'A', '192.0.2.10')
+        s = RecordSerializer(data={'zone': zone.pk, 'name': 'www',
+                                   'record_type': 'A', 'value': '192.0.2.10'})
+        assert not s.is_valid()
+        assert 'value' in s.errors
+
+    def test_api_partial_update_excludes_self(self, zone):
+        rec = self._add(zone, 'www', 'A', '192.0.2.10')
+        s = RecordSerializer(rec, data={'ttl': 600}, partial=True)
+        assert s.is_valid(), s.errors
+
+
 # ── named-checkzone error reporting ──────────────────────────────────────────
 
 class TestCheckzoneErrorMessage:

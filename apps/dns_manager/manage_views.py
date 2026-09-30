@@ -154,7 +154,8 @@ def zone_delete(request, pk):
 @staff_required
 def record_add(request, zone_pk):
     zone = get_object_or_404(Zone, pk=zone_pk)
-    form = RecordForm(request.POST or None)
+    # Zone set up front so Record.clean() can check for conflicting records.
+    form = RecordForm(request.POST or None, instance=Record(zone=zone))
     if form.is_valid():
         record = form.save(commit=False)
         record.zone = zone

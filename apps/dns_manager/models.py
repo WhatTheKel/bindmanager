@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.contrib.auth.models import User
 
-from .validators import validate_record_value
+from .validators import validate_record_conflicts, validate_record_value
 
 
 class NameServer(models.Model):
@@ -112,6 +112,9 @@ class Record(models.Model):
             validate_record_value(self.record_type, self.value)
         except ValidationError as e:
             raise ValidationError({'value': e.messages})
+        if self.zone_id and self.is_active:
+            validate_record_conflicts(self.zone, self.record_type, self.name,
+                                      self.value, self.priority, exclude_pk=self.pk)
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
