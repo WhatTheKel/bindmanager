@@ -55,6 +55,11 @@ class Zone(models.Model):
     minimum_ttl = models.PositiveIntegerField(default=86400)
     default_ttl = models.PositiveIntegerField(default=3600)
     is_dirty = models.BooleanField(default=True, db_index=True)
+    # The last zone file that passed central validation, and its serial.
+    # Pull agents are only ever served this, so a pending (dirty) or failing
+    # edit never reaches — or removes the zone from — the nameservers.
+    published_content = models.TextField(blank=True, default='')
+    published_serial = models.PositiveBigIntegerField(null=True, blank=True)
     created_by = models.ForeignKey(User, null=True, on_delete=models.SET_NULL, related_name='zones_created')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

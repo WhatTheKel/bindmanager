@@ -52,8 +52,10 @@ only the zones assigned to it, validating, and reloading locally.
 - Only writes `<zones_dir>/<zone>.zone` files and (optionally) the generated
   `named_conf_include` fragment — never edits your main `named.conf`.
 - Only ever fetches zones assigned to *this* nameserver (scoped server-side
-  by API key) and only once they're `is_dirty=False` — i.e. already
-  validated by BindManager's own `named-checkzone` run centrally.
+  by API key), and only the version that last passed BindManager's own
+  central `named-checkzone` run. A zone whose edits are still pending, or
+  failing that check, stays listed and keeps serving its last good version
+  — it is never removed for that.
 - Deleting a NameServer's assignment to a zone (or the zone itself) removes
   the local `.zone` file and drops it from the generated config include on
   the next run.

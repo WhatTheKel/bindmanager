@@ -405,9 +405,9 @@ If all of that resolves, the full pipeline — UI → database → Celery sync
 | `docker compose exec worker rndc status` fails | Hidden `bind` container unhealthy | `docker compose logs bind`; `docker compose ps` should show it `healthy` |
 | `web`/`worker` can't reach MariaDB/Redis | Service still bound to `127.0.0.1` only | Re-check Part 1.1 / 1.2's `bind-address` edits; `systemctl restart mariadb redis-server` after changing |
 | Zone `"has no address records"` in `docker compose logs bind` | An in-bailiwick NS record (e.g. `ns1.<zone>`) has no matching A/AAAA record in the same zone | Add the missing glue record |
-| Agent's `--dry-run` shows an empty zone list forever | Zone not yet `is_dirty=False` (Celery hasn't synced it), or the NameServer row has no zones assigned, or `is_active=False` | Check Manage → Zones assignment; confirm Part 3's checkpoint passed |
+| Agent's `--dry-run` shows an empty zone list forever | Zone hasn't passed its first sync yet (Celery not running, or a record fails `named-checkzone`), or the NameServer row has no zones assigned, or `is_active=False` | Check Manage → Zones assignment; confirm Part 3's checkpoint passed |
 | Agent gets HTTP 401 | Wrong API key in `config.ini`, or it was regenerated since | Re-copy the key from Manage → Nameservers |
-| Agent gets HTTP 404 on a specific zone | Zone isn't assigned to this NameServer, or still `is_dirty=True` | Check assignment / wait for sync |
+| Agent gets HTTP 404 on a specific zone | Zone isn't assigned to this NameServer, or has never passed a sync | Check assignment / wait for sync |
 | `systemctl status bindmanager-agent.timer` shows inactive | Timer not enabled | `systemctl enable --now bindmanager-agent.timer` |
 | `dig @localhost` returns nothing | `named.conf`'s `include` line missing, or BIND9 needs a reload | Confirm the include from 4.2; `rndc reload` manually to see the real error |
 

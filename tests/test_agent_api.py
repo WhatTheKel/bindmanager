@@ -37,6 +37,15 @@ class TestNameServerApiKey:
         assert nameserver.api_key != old_key
 
 
+def _publish(zone, content='; published\n', serial=None):
+    """Simulate a successful central sync having published the zone."""
+    zone.published_content = content
+    zone.published_serial = serial if serial is not None else zone.serial
+    zone.is_dirty = False
+    zone.save(update_fields=['published_content', 'published_serial', 'is_dirty'])
+    return zone
+
+
 class TestAgentZoneList:
     def test_requires_authentication(self, api_client, zone):
         resp = api_client.get(reverse('agent-zone-list'))
@@ -47,57 +56,68 @@ class TestAgentZoneList:
         resp = api_client.get(reverse('agent-zone-list'))
         assert resp.status_code == 401
 
-    def test_returns_only_assigned_clean_zones(self, api_client, nameserver, zone):
+    def test_returns_assigned_published_zones(self, api_client, nameserver, zone):
+        _publish(zone)
         _auth(api_client, nameserver)
         resp = api_client.get(reverse('agent-zone-list'))
         assert resp.status_code == 200
-        names = [z['name'] for z in resp.json()]
-        assert names == [zone.name]
+        assert [z['name'] for z in resp.json()] == [zone.name]
 
-    def test_excludes_dirty_zones(self, api_client, nameserver, zone):
-        zone.is_dirty = True
-        zone.save(update_fields=['is_dirty'])
+    def test_pending_zone_stays_listed_with_published_serial(self, api_client, nameserver, zone):
+        # The agent deletes any zone missing from this list, so a zone with
+        # edits waiting for the central sync must still be listed.
+        _publish(zone, serial=2026010101)
+        Record.objects.create(zone=zone, name='new', record_type='A', value='192.0.2.50')
+        zone.refresh_from_db()
+        assert zone.is_dirty
+        _auth(api_client, nameserver)
+        resp = api_client.get(reverse('agent-zone-list'))
+        assert resp.json() == [{'name': zone.name, 'zone_type': zone.zone_type, 'serial': 2026010101}]
+
+    def test_never_published_zone_not_listed(self, api_client, nameserver, zone):
         _auth(api_client, nameserver)
         resp = api_client.get(reverse('agent-zone-list'))
         assert resp.json() == []
 
     def test_excludes_zones_assigned_to_other_nameservers(self, api_client, other_nameserver, zone):
         # `zone` fixture is only linked to `nameserver`, not `other_nameserver`
+        _publish(zone)
         _auth(api_client, other_nameserver)
         resp = api_client.get(reverse('agent-zone-list'))
         assert resp.json() == []
 
 
 class TestAgentZoneDetail:
-    def test_returns_rendered_content(self, api_client, nameserver, zone):
-        Record.objects.create(zone=zone, name='www', record_type='A', value='192.0.2.10')
-        # Record.save() marks the zone dirty; simulate the Celery sync
-        # pipeline having already validated it before an agent may fetch it.
-        zone.is_dirty = False
-        zone.save(update_fields=['is_dirty'])
+    def test_returns_published_content(self, api_client, nameserver, zone):
+        _publish(zone, content='; validated file\nwww IN A 192.0.2.10\n', serial=2026010101)
         _auth(api_client, nameserver)
         resp = api_client.get(reverse('agent-zone-detail', args=[zone.name]))
         assert resp.status_code == 200
-        body = resp.json()
-        assert body['name'] == zone.name
-        assert body['serial'] == zone.serial
-        assert 'www' in body['content']
-        assert '192.0.2.10' in body['content']
+        assert resp.json() == {'name': zone.name, 'serial': 2026010101,
+                               'content': '; validated file\nwww IN A 192.0.2.10\n'}
+
+    def test_pending_edit_not_served(self, api_client, nameserver, zone):
+        _publish(zone, content='; validated file\n')
+        Record.objects.create(zone=zone, name='pending', record_type='A', value='192.0.2.99')
+        _auth(api_client, nameserver)
+        resp = api_client.get(reverse('agent-zone-detail', args=[zone.name]))
+        assert resp.status_code == 200
+        assert resp.json()['content'] == '; validated file\n'
 
     def test_does_not_bump_serial_on_repeated_fetch(self, api_client, nameserver, zone):
+        _publish(zone)
         _auth(api_client, nameserver)
         first = api_client.get(reverse('agent-zone-detail', args=[zone.name])).json()
         second = api_client.get(reverse('agent-zone-detail', args=[zone.name])).json()
-        assert first['serial'] == second['serial'] == zone.serial
+        assert first['serial'] == second['serial'] == zone.published_serial
 
     def test_404_for_unassigned_zone(self, api_client, other_nameserver, zone):
+        _publish(zone)
         _auth(api_client, other_nameserver)
         resp = api_client.get(reverse('agent-zone-detail', args=[zone.name]))
         assert resp.status_code == 404
 
-    def test_404_for_dirty_zone(self, api_client, nameserver, zone):
-        zone.is_dirty = True
-        zone.save(update_fields=['is_dirty'])
+    def test_404_for_never_published_zone(self, api_client, nameserver, zone):
         _auth(api_client, nameserver)
         resp = api_client.get(reverse('agent-zone-detail', args=[zone.name]))
         assert resp.status_code == 404

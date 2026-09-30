@@ -53,10 +53,10 @@ instead. This VM only gets:
 
 ### Before you start: confirm the app is syncing
 
-The agent only ever receives zones that BindManager's own sync has already
-validated (`is_dirty=False`). If the central Celery sync isn't running,
-this server will get **no zones at all**, no matter how correctly it's set
-up. On the BindManager host:
+The agent only ever receives the version of a zone that BindManager's own
+sync has validated. A new zone reaches it only after its first successful
+sync, so if the central Celery sync isn't running, this server will get
+**no zones at all**, no matter how correctly it's set up. On the BindManager host:
 
 ```bash
 docker compose exec web python manage.py shell -c "
@@ -389,7 +389,7 @@ agent/API issues that aren't OS-specific (401s, 404s, empty zone lists).
 | `dig` returns `REFUSED` and named logs `query (cache) ... denied` | Zone not loaded (see above) | Check `journalctl -u bindmanager-agent.service`, `cat /etc/named/bindmanager.conf` |
 | `dig @localhost` works, remote `dig` returns `REFUSED` | `allow-query` still `localhost` | Part 2, then `rndc reconfig` |
 | `dig @localhost` works, remote `dig` times out | Firewall closed, or `listen-on` still `127.0.0.1` | Part 2 firewall step; `ss -lunp \| grep :53` should show the VM's IP |
-| Agent dry run lists nothing even after adding a zone | Zone still unsynced on the app side (`is_dirty=True`) — often a record that fails `named-checkzone` | On the app host: `docker compose logs worker \| grep checkzone` — the error now includes the reason |
+| Agent dry run lists nothing even after adding a zone | The new zone hasn't passed its first sync on the app side yet — often a record that fails `named-checkzone` | On the app host: `docker compose logs worker \| grep checkzone` — the error now includes the reason |
 | `ns1.<zone>` gets no answer and no `aa` flag, while other names work | `ns1` was created as an **NS** record with an IP value | Change it to an **A** record (see 6.1) |
 | Zone files written but `named` logs `permission denied` loading them | Wrong SELinux label (files outside `/var/named`, or copied in from elsewhere) | `restorecon -Rv /var/named/bindmanager`; check `ausearch -m avc -ts recent` |
 | `rndc: connect failed` | `named` not running, or `/etc/rndc.key` missing | `systemctl status named named-setup-rndc` |

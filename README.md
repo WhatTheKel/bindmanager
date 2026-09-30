@@ -272,8 +272,9 @@ bindmanager/
 │   ├── test_template_tags.py   # rtype_class, url_replace (21 tests)
 │   ├── test_user_menu_role.py  # User-menu role badge: Superuser / Staff / User (3 tests)
 │   ├── test_models.py          # Zone, Record, AuditLog, NameServer (12 tests)
-│   ├── test_agent_api.py       # NameServer API key + pull-agent endpoints + agent rate limit (14 tests)
+│   ├── test_agent_api.py       # NameServer API key + pull-agent endpoints (published versions) + agent rate limit (16 tests)
 │   ├── test_validators.py      # Record value, CNAME-conflict and duplicate validation (form + API) + named-checkzone error text (49 tests)
+│   ├── test_zone_publish.py    # Sync publishes validated files; mid-sync edits re-sync; migration backfill (6 tests)
 │   ├── test_record_targets.py  # CNAME/NS/PTR/MX/SRV targets: missing trailing dot fixed or rejected (25 tests)
 │   ├── test_sso_pipeline.py    # SSO never links to the session user or by email (4 tests)
 │   ├── test_superuser_staff.py # Superuser always saved as staff (4 tests)
@@ -436,7 +437,7 @@ curl http://<host>:81/api/v1/zones/ \
 ## Running Tests
 
 ```bash
-# All tests (188 total)
+# All tests (196 total)
 pytest
 
 # One module

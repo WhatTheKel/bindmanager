@@ -24,7 +24,14 @@ def sync_zone(self, zone_pk: int):
         content, new_serial = build_zone(zone)
         atomic_write(zone.name, content)
         reload_zone(zone.name)
-        Zone.objects.filter(pk=zone_pk).update(is_dirty=False, serial=new_serial)
+        published = dict(serial=new_serial, published_content=content,
+                         published_serial=new_serial)
+        # Only clear is_dirty if nothing changed since we read the zone:
+        # mark_dirty() bumps updated_at, so an edit made mid-sync (not in
+        # `content`) leaves the zone dirty and it syncs again next round.
+        unchanged = Zone.objects.filter(pk=zone_pk, updated_at=zone.updated_at)
+        if not unchanged.update(is_dirty=False, **published):
+            Zone.objects.filter(pk=zone_pk).update(**published)
         AuditLog.objects.create(
             action=AuditLog.Action.SYNC,
             entity_type='zone',

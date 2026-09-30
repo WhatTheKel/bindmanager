@@ -75,9 +75,10 @@ def build_zone(zone) -> tuple[str, int]:
 def render_zone(zone) -> str:
     """
     Render zone content at its *current* stored serial, without bumping it.
-    Used to serve zone data to pull agents (apps/api/v1/agent_views.py) — the
-    serial is owned exclusively by the Celery sync pipeline's build_zone(),
-    so repeated agent polls must never advance it themselves.
+    The serial is owned exclusively by the Celery sync pipeline's
+    build_zone(). Agents are served Zone.published_content instead (the file
+    that last passed validation); this is used by migration 0004 to publish
+    zones that were already in sync.
     """
     zone_ctx, record_ctx = _build_context(zone)
     return _render(zone_ctx, record_ctx, zone.serial)
