@@ -197,7 +197,7 @@ bindmanager/
 │   │   ├── backends.py         # AuthentikOpenIdConnect — OIDC backend for Authentik
 │   │   ├── context_processors.py  # Injects SSO flags, branding vars (logo, favicon, app name) and APP_VERSION into all templates
 │   │   ├── pipeline.py         # set_staff_flag — grants is_staff to new SSO users
-│   │   ├── signals.py          # Writes AuditLog on login / logout / failed login
+│   │   ├── signals.py          # Writes AuditLog on login / logout / failed login; superuser ⇒ staff
 │   │   └── views.py            # SmartLoginView — rate-limited login, redirects staff to /dashboard/
 │   ├── api/
 │   │   ├── urls.py             # Mounts v1 at /api/v1/, JWT endpoints at /api/token/
@@ -273,6 +273,7 @@ bindmanager/
 │   ├── test_models.py          # Zone, Record, AuditLog, NameServer (12 tests)
 │   ├── test_agent_api.py       # NameServer API key + pull-agent endpoints + agent rate limit (14 tests)
 │   ├── test_validators.py      # Record value, CNAME-conflict and duplicate validation (form + API) + named-checkzone error text (49 tests)
+│   ├── test_superuser_staff.py # Superuser always saved as staff (4 tests)
 │   └── test_version.py         # VERSION file → APP_VERSION → template context (2 tests)
 ├── pytest.ini
 ├── nginx/nginx.conf
@@ -432,7 +433,7 @@ curl http://<host>:81/api/v1/zones/ \
 ## Running Tests
 
 ```bash
-# All tests (150 total)
+# All tests (154 total)
 pytest
 
 # One module

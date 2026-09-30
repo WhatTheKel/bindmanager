@@ -1,6 +1,21 @@
+from django.contrib.auth import get_user_model
 from django.contrib.auth.signals import user_logged_in, user_logged_out, user_login_failed
+from django.db.models.signals import pre_save
 from django.dispatch import receiver
 from apps.dns_manager.models import AuditLog
+
+
+@receiver(pre_save, sender=get_user_model())
+def superuser_is_staff(sender, instance, **kwargs):
+    """A superuser is always staff too.
+
+    The app gates the dashboard, management panel and API writes on is_staff
+    alone, so a superuser without it (easy to produce by unticking Staff in
+    the user form or /admin/) could only view zones. Enforced here so every
+    path — forms, /admin/, the shell — gets it.
+    """
+    if instance.is_superuser:
+        instance.is_staff = True
 
 
 def _get_ip(request):
