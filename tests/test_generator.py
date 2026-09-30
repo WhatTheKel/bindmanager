@@ -235,3 +235,23 @@ class TestRenderZone:
         zone = _make_zone(serial=42, records=[_make_record('www', 'A', '1.2.3.4')])
         content = render_zone(zone)
         assert 'IN  A  1.2.3.4' in content
+
+
+# ── Output layout ────────────────────────────────────────────────────────────
+
+class TestZoneFileLayout:
+    def test_no_blank_lines_between_records(self):
+        zone = _make_zone(records=[
+            _make_record('www', 'A', '192.0.2.1'),
+            _make_record('mail', 'MX', 'mail.example.com.', priority=10),
+            _make_record('ftp', 'CNAME', 'www'),
+        ])
+        content, _ = build_zone(zone)
+        records = content.split('; Zone Records\n', 1)[1]
+        assert '\n\n' not in records.rstrip('\n')
+        assert records.count('\n') == 3
+
+    def test_no_blank_lines_between_ns_records(self):
+        zone = _make_zone(ns_names=['ns1.example.com', 'ns2.example.com'])
+        content, _ = build_zone(zone)
+        assert '@   IN  NS  ns1.example.com.\n@   IN  NS  ns2.example.com.\n' in content

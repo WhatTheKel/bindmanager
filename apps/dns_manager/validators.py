@@ -40,6 +40,48 @@ def validate_record_value(record_type: str, value: str) -> None:
         )
 
 
+# Types whose value (or, for SRV, last field) is a hostname BIND will make
+# relative to $ORIGIN unless it ends with a dot.
+_TARGET_TYPES = {'CNAME', 'NS', 'PTR', 'MX', 'SRV'}
+
+
+def normalize_target(record_type: str, value: str, zone_name: str) -> str:
+    """Return `value` with an unambiguous hostname target, or raise.
+
+    In a zone file a name without a trailing dot is relative, so a CNAME to
+    "www.example.com" in zone example.com is read as
+    "www.example.com.example.com." — a name that doesn't exist, and that
+    named-checkzone doesn't flag. Rules for the target:
+
+    - ends with a dot, "@", or a single label ("www"): left as is;
+    - ends with the zone's own name ("www.example.com"): the missing dot is
+      added, since that's the only thing it can mean;
+    - any other dotted name ("www.other.org", "mail.eu"): rejected, because
+      it could be an outside host missing its dot or a longer relative name,
+      and guessing wrong silently breaks resolution.
+    """
+    if record_type not in _TARGET_TYPES:
+        return value
+    value = (value or '').strip()
+    if not value:
+        return value
+    head, sep, target = value.rpartition(' ') if record_type == 'SRV' else ('', '', value)
+    if target.endswith('.') or target == '@' or '.' not in target:
+        return value
+
+    zone = zone_name.lower().rstrip('.')
+    if target.lower() == zone or target.lower().endswith('.' + zone):
+        return f'{head}{sep}{target}.'
+
+    relative = f'{target}.{zone}.'
+    raise ValidationError(
+        f'"{target}" has no trailing dot, so DNS would read it as '
+        f'"{relative}". For a host outside this zone, end it with a dot: '
+        f'"{target}.". If you really mean "{relative}", enter that in full, '
+        f'including the final dot.'
+    )
+
+
 def _owner(name: str, zone_name: str) -> str:
     """Normalise a record name to its zone-relative owner ('@' for the apex)."""
     name = (name or '').strip().lower()

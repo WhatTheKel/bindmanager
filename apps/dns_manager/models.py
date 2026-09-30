@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.contrib.auth.models import User
 
-from .validators import validate_record_conflicts, validate_record_value
+from .validators import normalize_target, validate_record_conflicts, validate_record_value
 
 
 class NameServer(models.Model):
@@ -110,6 +110,8 @@ class Record(models.Model):
         # calls validate_record_value itself.
         try:
             validate_record_value(self.record_type, self.value)
+            if self.zone_id:
+                self.value = normalize_target(self.record_type, self.value, self.zone.name)
         except ValidationError as e:
             raise ValidationError({'value': e.messages})
         if self.zone_id and self.is_active:

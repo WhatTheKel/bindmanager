@@ -48,6 +48,7 @@
       <div class="form-group">
         <label class="form-label" for="{{ form.value.id_for_label }}">Value</label>
         {{ form.value }}
+        <div class="form-hint">For hostnames (CNAME, MX, NS, PTR, SRV): a name in this zone can be just <code>www</code>; any full name ends with a dot, e.g. <code>www.example.org.</code></div>
         {% if form.value.errors %}<ul class="form-errors">{% for e in form.value.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
       </div>
 

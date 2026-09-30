@@ -7,6 +7,10 @@ _jinja_env = Environment(
     loader=FileSystemLoader(str(_TEMPLATE_DIR)),
     autoescape=False,
     undefined=StrictUndefined,
+    # Drop the newline/indent left behind by {% for %}/{% if %} lines, so the
+    # zone file has no stray blank lines between records.
+    trim_blocks=True,
+    lstrip_blocks=True,
 )
 
 

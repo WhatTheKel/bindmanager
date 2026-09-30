@@ -267,13 +267,14 @@ bindmanager/
 │           └── zone_detail.html / zone_form.html / zone_list.html
 ├── tests/
 │   ├── conftest.py             # Shared fixtures (staff_user, regular_user, zone, nameserver)
-│   ├── test_generator.py       # Zone engine: _bump_serial, _quote_txt, build_zone (31 tests)
+│   ├── test_generator.py       # Zone engine: _bump_serial, _quote_txt, build_zone, file layout (33 tests)
 │   ├── test_permissions.py     # IsStaffOrReadOnly (21 tests)
 │   ├── test_template_tags.py   # rtype_class, url_replace (21 tests)
 │   ├── test_user_menu_role.py  # User-menu role badge: Superuser / Staff / User (3 tests)
 │   ├── test_models.py          # Zone, Record, AuditLog, NameServer (12 tests)
 │   ├── test_agent_api.py       # NameServer API key + pull-agent endpoints + agent rate limit (14 tests)
 │   ├── test_validators.py      # Record value, CNAME-conflict and duplicate validation (form + API) + named-checkzone error text (49 tests)
+│   ├── test_record_targets.py  # CNAME/NS/PTR/MX/SRV targets: missing trailing dot fixed or rejected (25 tests)
 │   ├── test_sso_pipeline.py    # SSO never links to the session user or by email (4 tests)
 │   ├── test_superuser_staff.py # Superuser always saved as staff (4 tests)
 │   └── test_version.py         # VERSION file → APP_VERSION → template context (2 tests)
@@ -435,7 +436,7 @@ curl http://<host>:81/api/v1/zones/ \
 ## Running Tests
 
 ```bash
-# All tests (161 total)
+# All tests (188 total)
 pytest
 
 # One module

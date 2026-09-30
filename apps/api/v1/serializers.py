@@ -1,7 +1,9 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 from apps.dns_manager.models import Zone, Record, NameServer, AuditLog
-from apps.dns_manager.validators import validate_record_conflicts, validate_record_value
+from apps.dns_manager.validators import (
+    normalize_target, validate_record_conflicts, validate_record_value,
+)
 
 
 class NameServerSerializer(serializers.ModelSerializer):
@@ -27,12 +29,16 @@ class RecordSerializer(serializers.ModelSerializer):
             return attrs.get(name, getattr(self.instance, name, default))
 
         record_type, value = field('record_type'), field('value')
+        zone = field('zone')
         try:
             validate_record_value(record_type, value)
+            if zone is not None:
+                value = normalize_target(record_type, value, zone.name)
         except DjangoValidationError as e:
             raise serializers.ValidationError({'value': e.messages})
+        if value != field('value'):
+            attrs['value'] = value
 
-        zone = field('zone')
         if zone is not None and field('is_active', True):
             try:
                 validate_record_conflicts(

@@ -3,11 +3,11 @@ $TTL {{ zone.default_ttl }}
 
 ; SOA Record
 @   IN  SOA {{ zone.primary_ns }} hostmaster.{{ zone.name }}. (
-            {{ serial }}           ; Serial
-            {{ zone.refresh }}     ; Refresh
-            {{ zone.retry }}       ; Retry
-            {{ zone.expire }}      ; Expire
-            {{ zone.minimum_ttl }} ; Minimum TTL
+            {{ '%-12s'|format(serial) }} ; Serial
+            {{ '%-12s'|format(zone.refresh) }} ; Refresh
+            {{ '%-12s'|format(zone.retry) }} ; Retry
+            {{ '%-12s'|format(zone.expire) }} ; Expire
+            {{ '%-12s'|format(zone.minimum_ttl) }} ; Minimum TTL
         )
 
 ; NS Records
