@@ -4,6 +4,9 @@ from django.db.models.signals import pre_save
 from django.dispatch import receiver
 from apps.dns_manager.models import AuditLog
 
+from . import lockout
+from .client_ip import client_ip
+
 
 @receiver(pre_save, sender=get_user_model())
 def superuser_is_staff(sender, instance, **kwargs):
@@ -18,12 +21,8 @@ def superuser_is_staff(sender, instance, **kwargs):
         instance.is_staff = True
 
 
-def _get_ip(request):
-    """Return the real client IP, respecting X-Forwarded-For from nginx."""
-    xff = request.META.get('HTTP_X_FORWARDED_FOR') if request else None
-    if xff:
-        return xff.split(',')[0].strip()
-    return (request.META.get('REMOTE_ADDR', 'unknown') if request else 'unknown')
+# The real client address — not the spoofable first X-Forwarded-For entry
+_get_ip = client_ip
 
 
 @receiver(user_logged_in)
@@ -53,7 +52,8 @@ def on_logout(sender, request, user, **kwargs):
 
 
 @receiver(user_login_failed)
-def on_login_failed(sender, credentials, request, **kwargs):
+def on_login_failed(sender, credentials, request=None, **kwargs):
+    lockout.record_failure(request)
     ip = _get_ip(request)
     username = credentials.get('username', '?') if credentials else '?'
     AuditLog.objects.create(

@@ -10,3 +10,6 @@ DATABASES = {
 
 # Disable password hashing to speed up user fixture creation
 PASSWORD_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher']
+
+# No Redis in tests
+CACHES = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}}

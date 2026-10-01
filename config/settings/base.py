@@ -10,6 +10,12 @@ CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='http://localhost'
 USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
+# How many reverse proxies we run in front of the app (1 = the bundled
+# nginx). The client address is taken that many entries from the *right* of
+# X-Forwarded-For, never the first entry (which the client can fake). Raise
+# it only if you add another proxy (e.g. a load balancer) in front of nginx.
+TRUSTED_PROXY_COUNT = config('TRUSTED_PROXY_COUNT', default=1, cast=int)
+
 DJANGO_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -147,6 +153,16 @@ LOGGING = {
 }
 
 # Celery
+# Shared by all gunicorn workers: login lockout counters and API rate limits
+# must be counted in one place, not per worker process.
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': config('REDIS_URL', default='redis://redis:6379/0'),
+        'KEY_PREFIX': 'bindmanager',
+    }
+}
+
 CELERY_BROKER_URL = config('REDIS_URL', default='redis://redis:6379/0')
 CELERY_RESULT_BACKEND = config('REDIS_URL', default='redis://redis:6379/0')
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
@@ -164,6 +180,9 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 50,
+    # Same rule as apps/accounts/client_ip.py, so API rate limits (including
+    # /api/token/) can't be dodged with a fake X-Forwarded-For.
+    'NUM_PROXIES': TRUSTED_PROXY_COUNT,
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.AnonRateThrottle',
         'rest_framework.throttling.UserRateThrottle',

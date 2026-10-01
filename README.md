@@ -198,7 +198,9 @@ bindmanager/
 │   │   ├── context_processors.py  # Injects SSO flags, branding vars (logo, favicon, app name) and APP_VERSION into all templates
 │   │   ├── pipeline.py         # SSO pipeline: ignore_session_user (no linking to a logged-in account), set_staff_flag
 │   │   ├── signals.py          # Writes AuditLog on login / logout / failed login; superuser ⇒ staff
-│   │   └── views.py            # SmartLoginView — rate-limited login, redirects staff to /dashboard/
+│   │   ├── client_ip.py        # Real client IP from X-Forwarded-For (TRUSTED_PROXY_COUNT from the right)
+│   │   ├── lockout.py          # Per-IP failed-login lockout (Redis), shared by login page and /api/token/
+│   │   └── views.py            # SmartLoginView + LockoutTokenObtainPairView; redirects staff to /dashboard/
 │   ├── api/
 │   │   ├── urls.py             # Mounts v1 at /api/v1/, JWT endpoints at /api/token/
 │   │   └── v1/
@@ -273,6 +275,7 @@ bindmanager/
 │   ├── test_permissions.py     # IsStaffOrReadOnly (21 tests)
 │   ├── test_template_tags.py   # rtype_class, url_replace (21 tests)
 │   ├── test_user_menu_role.py  # User-menu role badge: Superuser / Staff / User (3 tests)
+│   ├── test_login_lockout.py   # Real client IP despite fake X-Forwarded-For; lockout before password; /api/token/ shares it (15 tests)
 │   ├── test_models.py          # Zone, Record, AuditLog, NameServer (12 tests)
 │   ├── test_agent_api.py       # NameServer API key + pull-agent endpoints (published versions) + agent rate limit (16 tests)
 │   ├── test_update_agent_script.py # agents/update-agent.sh in a sandbox: update, no-op, rollback, downgrade guard (6 tests)
@@ -440,7 +443,7 @@ curl http://<host>:81/api/v1/zones/ \
 ## Running Tests
 
 ```bash
-# All tests (283 total)
+# All tests (298 total)
 pytest
 
 # One module
@@ -465,7 +468,7 @@ The following controls are active out of the box:
 |---|---|
 | HTTP security headers | CSP, `Referrer-Policy`, `Permissions-Policy`, `X-Content-Type-Options`, `X-Frame-Options` set by Nginx on every response |
 | Session timeout | 8 hours (configurable via `SESSION_COOKIE_AGE` in `.env`) |
-| Login rate limiting | IP-based; HTTP 429 returned on the 10th failed attempt within 5 minutes |
+| Login rate limiting | Per client IP, shared by the login page and `/api/token/`: after 10 failed attempts within 5 minutes every attempt gets HTTP 429 — checked before the password, so even the right one is refused until it expires. The IP is the one nginx saw (`TRUSTED_PROXY_COUNT`, default 1), so a faked `X-Forwarded-For` can't dodge it or fake the IP in the audit log. Counted in Redis, shared by all workers |
 | API rate limiting | DRF throttling — 20/min anonymous, 300/min authenticated, 300/min per pull-agent key, applied to every REST endpoint |
 | Audit log integrity | Append-only from application code; add/change/delete disabled in the Django admin |
 | API docs | `/api/v1/` requires `is_superuser=True` — staff-only users are redirected to login |
