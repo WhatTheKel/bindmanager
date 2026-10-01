@@ -199,16 +199,25 @@ def sync(cfg: Config, dry_run: bool = False) -> int:
     manifest = load_manifest(cfg)
 
     changed: list[str] = []
+    failed: list[str] = []
     for name, zone in assigned_by_name.items():
         on_disk = local_serial(cfg, name)
         if on_disk == zone['serial']:
             continue
-        changed.append(name)
         log.info('zone %s changed (disk=%s api=%s)', name, on_disk, zone['serial'])
         if dry_run:
+            changed.append(name)
             continue
-        detail = fetch_zone_content(cfg, name)
-        write_zone_file(cfg, name, detail['content'])
+        # One bad zone must not hold back every other zone's update: log it,
+        # keep serving whatever file this server already has, and move on.
+        try:
+            detail = fetch_zone_content(cfg, name)
+            write_zone_file(cfg, name, detail['content'])
+        except Exception as exc:
+            log.error('zone %s not updated: %s', name, exc)
+            failed.append(name)
+            continue
+        changed.append(name)
 
     removed = [name for name in manifest if name not in assigned_by_name]
     for name in removed:
@@ -216,14 +225,17 @@ def sync(cfg: Config, dry_run: bool = False) -> int:
         if not dry_run:
             remove_zone_file(cfg, name)
 
-    topology_changed = bool(removed) or any(name not in manifest for name in assigned_by_name)
-
     if dry_run:
-        log.info('dry-run: %d changed, %d removed, topology_changed=%s',
-                  len(changed), len(removed), topology_changed)
+        log.info('dry-run: %d changed, %d removed', len(changed), len(removed))
         return 0
 
-    write_named_conf_include(cfg, assigned)
+    # Only zones with a file on disk can be loaded; a new zone whose first
+    # write failed is left out until a later run succeeds.
+    present = {name: z for name, z in assigned_by_name.items()
+               if (cfg.zones_dir / f'{name}.zone').exists()}
+    topology_changed = bool(removed) or any(name not in manifest for name in present)
+
+    write_named_conf_include(cfg, list(present.values()))
 
     if topology_changed:
         reload_all(cfg)
@@ -231,12 +243,12 @@ def sync(cfg: Config, dry_run: bool = False) -> int:
         for name in changed:
             reload_zone(cfg, name)
 
-    new_manifest = {name: z['serial'] for name, z in assigned_by_name.items()}
+    new_manifest = {name: z['serial'] for name, z in present.items()}
     save_manifest(cfg, new_manifest)
 
-    log.info('sync complete: %d changed, %d removed, %d total assigned',
-              len(changed), len(removed), len(assigned_by_name))
-    return 0
+    log.info('sync complete: %d changed, %d removed, %d failed, %d total assigned',
+              len(changed), len(removed), len(failed), len(assigned_by_name))
+    return 1 if failed else 0
 
 
 def main() -> int:

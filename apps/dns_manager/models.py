@@ -3,8 +3,20 @@ import secrets
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.contrib.auth.models import User
+from django.db.models.signals import m2m_changed
+from django.dispatch import receiver
+from django.utils import timezone
 
-from .validators import normalize_target, validate_record_conflicts, validate_record_value
+from .validators import (
+    normalize_owner, normalize_target, validate_priority,
+    validate_record_conflicts, validate_record_value,
+)
+
+
+def _mark_zones_dirty(zone_qs):
+    """Queue zones for re-sync. Bumps updated_at too, so a sync already in
+    progress sees the change and leaves the zone dirty (see tasks.sync_zone)."""
+    zone_qs.update(is_dirty=True, updated_at=timezone.now())
 
 
 class NameServer(models.Model):
@@ -28,7 +40,16 @@ class NameServer(models.Model):
     def save(self, *args, **kwargs):
         if not self.api_key:
             self.api_key = secrets.token_hex(32)
+        renamed = (self.pk is not None and
+                   NameServer.objects.filter(pk=self.pk).exclude(name=self.name).exists())
         super().save(*args, **kwargs)
+        if renamed:
+            _mark_zones_dirty(self.zones.all())
+
+    def delete(self, *args, **kwargs):
+        # Its NS records disappear from every zone it served
+        _mark_zones_dirty(self.zones.all())
+        return super().delete(*args, **kwargs)
 
     def regenerate_api_key(self):
         self.api_key = secrets.token_hex(32)
@@ -60,7 +81,10 @@ class Zone(models.Model):
     # edit never reaches — or removes the zone from — the nameservers.
     published_content = models.TextField(blank=True, default='')
     published_serial = models.PositiveBigIntegerField(null=True, blank=True)
-    created_by = models.ForeignKey(User, null=True, on_delete=models.SET_NULL, related_name='zones_created')
+    # Set while a sync_zone task works on the zone, so overlapping dispatches
+    # (beat runs every minute) skip it instead of writing concurrently.
+    sync_lock_until = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='zones_created')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -71,9 +95,36 @@ class Zone(models.Model):
     def __str__(self):
         return self.name
 
+    # Fields written into the zone file; changing any of them needs a re-sync.
+    CONTENT_FIELDS = ('name', 'refresh', 'retry', 'expire', 'minimum_ttl', 'default_ttl')
+
+    def save(self, *args, **kwargs):
+        update_fields = kwargs.get('update_fields')
+        if self.pk is not None and not self._state.adding and (
+                update_fields is None or set(update_fields) & set(self.CONTENT_FIELDS)):
+            old = Zone.objects.filter(pk=self.pk).values(*self.CONTENT_FIELDS).first()
+            if old and any(old[f] != getattr(self, f) for f in self.CONTENT_FIELDS):
+                self.is_dirty = True
+                if update_fields is not None:
+                    kwargs['update_fields'] = set(update_fields) | {'is_dirty', 'updated_at'}
+        super().save(*args, **kwargs)
+
     def mark_dirty(self):
         self.is_dirty = True
         self.save(update_fields=['is_dirty', 'updated_at'])
+
+
+@receiver(m2m_changed, sender=Zone.nameservers.through)
+def _nameservers_changed(sender, instance, action, reverse, pk_set, **kwargs):
+    """Assigning or removing nameservers changes the zone's NS records."""
+    if action not in ('post_add', 'post_remove', 'post_clear'):
+        return
+    if not reverse:                       # zone.nameservers.add/remove/set/clear
+        _mark_zones_dirty(Zone.objects.filter(pk=instance.pk))
+    elif pk_set:                          # nameserver.zones.add/remove
+        _mark_zones_dirty(Zone.objects.filter(pk__in=pk_set))
+    elif action == 'post_clear':          # nameserver.zones.clear(): pk_set unknown
+        _mark_zones_dirty(Zone.objects.all())
 
 
 class Record(models.Model):
@@ -96,7 +147,7 @@ class Record(models.Model):
     value = models.TextField()
     priority = models.PositiveSmallIntegerField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
-    created_by = models.ForeignKey(User, null=True, on_delete=models.SET_NULL, related_name='records_created')
+    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='records_created')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -112,20 +163,37 @@ class Record(models.Model):
 
     def clean(self):
         # Runs for ModelForms (manage UI, Django admin); the API serializer
-        # calls validate_record_value itself.
+        # calls the same validators itself.
+        errors = {}
         try:
             validate_record_value(self.record_type, self.value)
             if self.zone_id:
                 self.value = normalize_target(self.record_type, self.value, self.zone.name)
         except ValidationError as e:
-            raise ValidationError({'value': e.messages})
+            errors['value'] = e.messages
+        try:
+            validate_priority(self.record_type, self.priority)
+        except ValidationError as e:
+            errors['priority'] = e.messages
+        if self.zone_id:
+            try:
+                self.name = normalize_owner(self.name, self.zone.name)
+            except ValidationError as e:
+                errors['name'] = e.messages
+        if errors:
+            raise ValidationError(errors)
         if self.zone_id and self.is_active:
             validate_record_conflicts(self.zone, self.record_type, self.name,
                                       self.value, self.priority, exclude_pk=self.pk)
 
     def save(self, *args, **kwargs):
+        old_zone_id = (Record.objects.filter(pk=self.pk).values_list('zone_id', flat=True).first()
+                       if self.pk else None)
         super().save(*args, **kwargs)
         self.zone.mark_dirty()
+        if old_zone_id and old_zone_id != self.zone_id:
+            # Moved to another zone: the old one no longer has it
+            _mark_zones_dirty(Zone.objects.filter(pk=old_zone_id))
 
     def delete(self, *args, **kwargs):
         zone = self.zone

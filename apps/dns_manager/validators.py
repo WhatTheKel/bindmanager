@@ -1,4 +1,5 @@
 import ipaddress
+import re
 
 from django.core.exceptions import ValidationError
 
@@ -38,6 +39,89 @@ def validate_record_value(record_type: str, value: str) -> None:
             f'{record_type} records point to a hostname, not an IP address. '
             f'To give a name an IP, add an A (or AAAA) record instead.'
         )
+
+    elif record_type == 'SOA':
+        raise ValidationError(
+            'The SOA record is generated from the zone\'s own settings '
+            '(Edit Zone), so it can\'t be added as a record.'
+        )
+
+    elif record_type == 'SRV':
+        parts = value.split()
+        if (len(parts) != 3 or not all(p.isdigit() and int(p) <= 65535 for p in parts[:2])):
+            raise ValidationError(
+                'SRV value must be "weight port target", e.g. "5 5060 sip.example.com." '
+                '(the priority goes in the Priority field).'
+            )
+        if _is_ip(parts[2].rstrip('.')):
+            raise ValidationError('The SRV target must be a hostname, not an IP address.')
+
+
+def validate_priority(record_type: str, priority) -> None:
+    """MX and SRV lines need a priority, or the zone file gets "MX None host"."""
+    if record_type in ('MX', 'SRV'):
+        if priority is None or priority == '':
+            raise ValidationError(f'{record_type} records need a priority (e.g. 10).')
+        if not 0 <= int(priority) <= 65535:
+            raise ValidationError('Priority must be between 0 and 65535.')
+
+
+# One DNS label: letters, digits, hyphen and underscore (for _dmarc, _sip…),
+# not starting or ending with a hyphen.
+_LABEL_RE = re.compile(r'^(?!-)[A-Za-z0-9_-]{1,63}(?<!-)$')
+
+
+def _check_labels(name: str, what: str, allow_wildcard: bool = False) -> None:
+    labels = name.split('.')
+    if len(name) > 253 or any(not l for l in labels):
+        raise ValidationError(f'"{name}" is not a valid {what} (empty label or too long).')
+    for i, label in enumerate(labels):
+        if allow_wildcard and i == 0 and label == '*':
+            continue
+        if not _LABEL_RE.match(label):
+            raise ValidationError(
+                f'"{name}" is not a valid {what}: use letters, digits, "-" and "_" '
+                f'separated by dots (no spaces).'
+            )
+
+
+def normalize_zone_name(name: str) -> str:
+    """Lower-case, drop a trailing dot, and check it's a valid domain name."""
+    name = (name or '').strip().lower().rstrip('.')
+    if not name:
+        raise ValidationError('Enter the zone name, e.g. example.com.')
+    _check_labels(name, 'zone name')
+    return name
+
+
+def normalize_owner(name: str, zone_name: str) -> str:
+    """Return the record name relative to the zone ('@' for the apex), or raise.
+
+    A name without a trailing dot is relative to the zone in a zone file, so
+    "www.example.com" typed as a name in example.com would become
+    "www.example.com.example.com.". Names that end with the zone's own name
+    (with or without the dot) are made relative; names ending with a dot must
+    be inside the zone.
+    """
+    raw = (name or '').strip()
+    zone = zone_name.lower().rstrip('.')
+    if raw in ('', '@'):
+        return '@'
+    low = raw.lower()
+    if low.rstrip('.') == zone:
+        return '@'
+    for suffix in (f'.{zone}.', f'.{zone}'):
+        if low.endswith(suffix):
+            raw = raw[:-len(suffix)]
+            break
+    else:
+        if raw.endswith('.'):
+            raise ValidationError(
+                f'"{raw}" is outside this zone ({zone}). Enter a name in the zone, '
+                f'e.g. "www" or "www.{zone}".'
+            )
+    _check_labels(raw, 'record name', allow_wildcard=True)
+    return raw
 
 
 # Types whose value (or, for SRV, last field) is a hostname BIND will make

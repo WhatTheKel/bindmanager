@@ -22,5 +22,7 @@ def nameserver(db):
 def zone(db, nameserver):
     from apps.dns_manager.models import Zone
     z = Zone.objects.create(name='example.com', serial=1, is_dirty=False)
-    z.nameservers.add(nameserver)
+    z.nameservers.add(nameserver)          # marks it dirty (NS records change)
+    Zone.objects.filter(pk=z.pk).update(is_dirty=False)
+    z.refresh_from_db()
     return z

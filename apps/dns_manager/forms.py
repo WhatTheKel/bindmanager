@@ -2,6 +2,7 @@ from django import forms
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import UserCreationForm
 from .models import NameServer, Zone, Record
+from .validators import normalize_zone_name
 
 _INPUT = {'class': 'form-input'}
 _SELECT = {'class': 'form-input form-select'}
@@ -43,6 +44,9 @@ class ZoneForm(forms.ModelForm):
             'minimum_ttl': forms.NumberInput(attrs=_NUMBER),
             'default_ttl': forms.NumberInput(attrs=_NUMBER),
         }
+
+    def clean_name(self):
+        return normalize_zone_name(self.cleaned_data.get('name'))
 
 
 class RecordForm(forms.ModelForm):

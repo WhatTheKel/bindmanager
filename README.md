@@ -267,6 +267,7 @@ bindmanager/
 │           └── zone_detail.html / zone_form.html / zone_list.html
 ├── tests/
 │   ├── conftest.py             # Shared fixtures (staff_user, regular_user, zone, nameserver)
+│   ├── test_bug_sweep.py       # Re-sync on zone/NS changes, name/priority/SRV validation, sync lock + audit de-dup, central cleanup, agent partial failure (67 tests)
 │   ├── test_generator.py       # Zone engine: _bump_serial, _quote_txt, build_zone, file layout (33 tests)
 │   ├── test_permissions.py     # IsStaffOrReadOnly (21 tests)
 │   ├── test_template_tags.py   # rtype_class, url_replace (21 tests)
@@ -437,7 +438,7 @@ curl http://<host>:81/api/v1/zones/ \
 ## Running Tests
 
 ```bash
-# All tests (196 total)
+# All tests (263 total)
 pytest
 
 # One module

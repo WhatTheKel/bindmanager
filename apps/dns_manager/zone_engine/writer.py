@@ -41,11 +41,40 @@ def _validate(zone_name: str, zone_file: Path) -> None:
         raise ValueError(f'named-checkzone failed for {zone_name}:\n{output}')
 
 
+def _rndc(*args: str) -> subprocess.CompletedProcess:
+    return subprocess.run([settings.RNDC_BIN, *args], capture_output=True, text=True)
+
+
 def reload_zone(zone_name: str) -> None:
-    result = subprocess.run(
-        [settings.RNDC_BIN, 'reload', zone_name],
-        capture_output=True,
-        text=True,
-    )
+    result = _rndc('reload', zone_name)
+    if result.returncode != 0 and 'not found' in (result.stdout + result.stderr):
+        # A brand-new zone: the hidden primary doesn't know it yet (its
+        # zone-watcher only polls every 15s), so add it now.
+        zone_file = Path(settings.BIND_ZONES_DIR) / f'{zone_name}.zone'
+        result = _rndc('addzone', zone_name, f'{{ type master; file "{zone_file}"; }};')
+        if result.returncode != 0 and 'already exists' in (result.stdout + result.stderr):
+            result = _rndc('reload', zone_name)   # the watcher beat us to it
     if result.returncode != 0:
-        raise RuntimeError(f'rndc reload failed for {zone_name}:\n{result.stderr}')
+        output = (result.stdout + result.stderr).strip()
+        raise RuntimeError(f'rndc reload failed for {zone_name}:\n{output}')
+
+
+def remove_zone(zone_name: str) -> None:
+    """Delete a zone's central file and drop it from the hidden primary.
+
+    The file goes first, so the zone-watcher can't re-add it. A zone that
+    was never loaded is fine ("not found" is ignored).
+    """
+    (Path(settings.BIND_ZONES_DIR) / f'{zone_name}.zone').unlink(missing_ok=True)
+    result = _rndc('delzone', zone_name)
+    output = (result.stdout + result.stderr).strip()
+    if result.returncode != 0 and 'not found' not in output:
+        raise RuntimeError(f'rndc delzone failed for {zone_name}:\n{output}')
+
+
+def central_zone_names() -> set[str]:
+    """Zone names that have a file in the central zones directory."""
+    zone_dir = Path(settings.BIND_ZONES_DIR)
+    if not zone_dir.is_dir():
+        return set()
+    return {f.name[:-len('.zone')] for f in zone_dir.glob('*.zone')}

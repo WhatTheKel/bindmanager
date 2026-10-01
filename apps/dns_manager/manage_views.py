@@ -231,8 +231,7 @@ def nameserver_edit(request, pk):
     ns = get_object_or_404(NameServer, pk=pk)
     form = NameServerForm(request.POST or None, instance=ns)
     if form.is_valid():
-        form.save()
-        ns.zones.all().update(is_dirty=True)
+        form.save()   # a rename re-syncs its zones (NameServer.save)
         _audit(request, AuditLog.Action.UPDATE, 'nameserver', ns.pk,
                f'Updated nameserver {ns.name}')
         messages.success(request, f'Nameserver "{ns.name}" updated.')
@@ -247,8 +246,7 @@ def nameserver_delete(request, pk):
     ns = get_object_or_404(NameServer, pk=pk)
     if request.method == 'POST':
         name = ns.name
-        ns.zones.all().update(is_dirty=True)
-        ns.delete()
+        ns.delete()   # re-syncs its zones (NameServer.delete)
         _audit(request, AuditLog.Action.DELETE, 'nameserver', pk,
                f'Deleted nameserver {name}')
         messages.success(request, f'Nameserver "{name}" deleted.')

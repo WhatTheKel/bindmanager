@@ -2,7 +2,8 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 from apps.dns_manager.models import Zone, Record, NameServer, AuditLog
 from apps.dns_manager.validators import (
-    normalize_target, validate_record_conflicts, validate_record_value,
+    normalize_owner, normalize_target, normalize_zone_name, validate_priority,
+    validate_record_conflicts, validate_record_value,
 )
 
 
@@ -28,16 +29,30 @@ class RecordSerializer(serializers.ModelSerializer):
         def field(name, default=None):
             return attrs.get(name, getattr(self.instance, name, default))
 
-        record_type, value = field('record_type'), field('value')
+        record_type, value, name = field('record_type'), field('value'), field('name')
         zone = field('zone')
+        errors = {}
         try:
             validate_record_value(record_type, value)
             if zone is not None:
                 value = normalize_target(record_type, value, zone.name)
         except DjangoValidationError as e:
-            raise serializers.ValidationError({'value': e.messages})
+            errors['value'] = e.messages
+        try:
+            validate_priority(record_type, field('priority'))
+        except DjangoValidationError as e:
+            errors['priority'] = e.messages
+        if zone is not None:
+            try:
+                name = normalize_owner(name, zone.name)
+            except DjangoValidationError as e:
+                errors['name'] = e.messages
+        if errors:
+            raise serializers.ValidationError(errors)
         if value != field('value'):
             attrs['value'] = value
+        if name != field('name'):
+            attrs['name'] = name
 
         if zone is not None and field('is_active', True):
             try:
@@ -84,6 +99,12 @@ class ZoneDetailSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at',
         ]
         read_only_fields = ['serial', 'is_dirty', 'created_at', 'updated_at']
+
+    def validate_name(self, value):
+        try:
+            return normalize_zone_name(value)
+        except DjangoValidationError as e:
+            raise serializers.ValidationError(e.messages)
 
     def create(self, validated_data):
         ns_list = validated_data.pop('nameserver_ids', [])
