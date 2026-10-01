@@ -2,12 +2,6 @@
 {% block title %}{{ title }} — {{ zone.name }}{% endblock %}
 {% block sb_zones %}active{% endblock %}
 
-{% block extra_head %}
-<style>
-  .priority-row { display:none; }
-</style>
-{% endblock %}
-
 {% block manage_content %}
 <nav class="breadcrumbs">
   <a href="{% url 'dns_manager:manage_dashboard' %}">Dashboard</a>
@@ -58,12 +52,20 @@
           {{ form.ttl }}
           <div class="form-hint">Leave blank to inherit zone default</div>
         </div>
-        <div class="form-group priority-row" id="priority-group">
+        <div class="form-group" id="priority-group"{% if form.record_type.value != 'MX' and form.record_type.value != 'SRV' %} hidden{% endif %}>
           <label class="form-label" for="{{ form.priority.id_for_label }}">Priority</label>
           {{ form.priority }}
           <div class="form-hint">Required for MX and SRV records</div>
           {% if form.priority.errors %}<ul class="form-errors">{% for e in form.priority.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
         </div>
+      </div>
+
+      <div class="form-group" id="ptr-group"{% if form.record_type.value != 'A' and form.record_type.value != 'AAAA' %} hidden{% endif %}>
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.875rem">
+          {{ form.sync_ptr }}
+          <span>{{ form.sync_ptr.label }}</span>
+        </label>
+        <div class="form-hint">{{ form.sync_ptr.help_text }} An existing PTR for this address is updated. If no reverse zone covers the address, one is created for its /24 (IPv4) or /64 (IPv6) on this zone's nameservers.</div>
       </div>
 
       <div class="form-group">
@@ -88,10 +90,13 @@
 (function () {
   var typeSelect = document.getElementById('id_record_type');
   var priorityGroup = document.getElementById('priority-group');
+  var ptrGroup = document.getElementById('ptr-group');
   var PRIORITY_TYPES = ['MX', 'SRV'];
+  var PTR_TYPES = ['A', 'AAAA'];
 
   function toggle() {
-    priorityGroup.style.display = PRIORITY_TYPES.includes(typeSelect.value) ? '' : 'none';
+    priorityGroup.hidden = !PRIORITY_TYPES.includes(typeSelect.value);
+    ptrGroup.hidden = !PTR_TYPES.includes(typeSelect.value);
   }
 
   typeSelect.addEventListener('change', toggle);

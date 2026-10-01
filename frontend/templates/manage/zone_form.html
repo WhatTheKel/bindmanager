@@ -27,7 +27,7 @@
           <label class="form-label" for="{{ form.name.id_for_label }}">Zone Name</label>
           {{ form.name }}
           {% if form.name.errors %}<ul class="form-errors">{% for e in form.name.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
-          <div class="form-hint">Fully-qualified domain name, e.g. example.com</div>
+          <div class="form-hint">Fully-qualified domain name, e.g. example.com. Leave blank when you enter a subnet.</div>
         </div>
         <div class="form-group">
           <label class="form-label" for="{{ form.zone_type.id_for_label }}">Zone Type</label>
@@ -35,9 +35,17 @@
           {% if form.zone_type.errors %}<ul class="form-errors">{% for e in form.zone_type.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
         </div>
       </div>
-      <div class="form-group" style="max-width:220px">
-        <label class="form-label" for="{{ form.ip_version.id_for_label }}">IP Version</label>
-        {{ form.ip_version }}
+      <div class="form-grid-2">
+        <div class="form-group">
+          <label class="form-label" for="{{ form.subnet.id_for_label }}">Subnet <span style="color:var(--text-muted);font-weight:400">(reverse zones)</span></label>
+          {{ form.subnet }}
+          {% if form.subnet.errors %}<ul class="form-errors">{% for e in form.subnet.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+          <div class="form-hint">{{ form.subnet.help_text }} IPv4 /8, /16 or /24; IPv6 any multiple of 4.</div>
+        </div>
+        <div class="form-group" style="max-width:220px">
+          <label class="form-label" for="{{ form.ip_version.id_for_label }}">IP Version</label>
+          {{ form.ip_version }}
+        </div>
       </div>
     </div>
   </div>

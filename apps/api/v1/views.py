@@ -4,6 +4,7 @@ from django.shortcuts import render
 from rest_framework import viewsets, permissions, filters, mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.db import transaction
 from django.db.models import Count, Q
 
 from apps.dns_manager.models import Zone, Record, NameServer, AuditLog
@@ -151,6 +152,32 @@ class RecordViewSet(AuditMixin, viewsets.ModelViewSet):
 
     def _audit_label(self, instance):
         return f'{instance.record_type} {instance.name} → {instance.zone.name}'
+
+    _PTR_AUDIT = {
+        'create': AuditLog.Action.CREATE,
+        'update': AuditLog.Action.UPDATE,
+        'delete': AuditLog.Action.DELETE,
+    }
+
+    def _audit_ptr(self, serializer):
+        for change in serializer.ptr_changes:
+            if change.action in self._PTR_AUDIT:
+                AuditLog.objects.create(
+                    user=self.request.user, action=self._PTR_AUDIT[change.action],
+                    entity_type=change.entity_type, entity_id=change.entity_id,
+                    detail=f'[API] {change.message}',
+                )
+
+    # The record and its PTR record / reverse zone are saved together.
+    @transaction.atomic
+    def perform_create(self, serializer):
+        super().perform_create(serializer)
+        self._audit_ptr(serializer)
+
+    @transaction.atomic
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        self._audit_ptr(serializer)
 
 
 class NameServerViewSet(AuditMixin, viewsets.ModelViewSet):

@@ -2,6 +2,7 @@ from django import forms
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import UserCreationForm
 from .models import NameServer, Zone, Record
+from .ptr import reverse_zone_for_subnet
 from .validators import normalize_zone_name
 
 _INPUT = {'class': 'form-input'}
@@ -27,6 +28,12 @@ class ZoneForm(forms.ModelForm):
         widget=forms.CheckboxSelectMultiple,
         help_text='Nameservers that will serve this zone.',
     )
+    subnet = forms.CharField(
+        required=False,
+        widget=forms.TextInput(attrs={**_INPUT, 'placeholder': '192.0.2.0/24 or 2001:db8::/32'}),
+        help_text='For a reverse zone: enter the subnet and the zone name, type and '
+                  'IP version are filled in from it.',
+    )
 
     class Meta:
         model = Zone
@@ -45,8 +52,32 @@ class ZoneForm(forms.ModelForm):
             'default_ttl': forms.NumberInput(attrs=_NUMBER),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['name'].required = False   # may come from the subnet
+
     def clean_name(self):
-        return normalize_zone_name(self.cleaned_data.get('name'))
+        name = self.cleaned_data.get('name')
+        return normalize_zone_name(name) if (name or '').strip() else ''
+
+    def clean(self):
+        cleaned = super().clean()
+        subnet = (cleaned.get('subnet') or '').strip()
+        if subnet:
+            try:
+                name, version = reverse_zone_for_subnet(subnet)
+            except forms.ValidationError as e:
+                self.add_error('subnet', e)
+                return cleaned
+            typed = cleaned.get('name')
+            if typed and typed != name:
+                self.add_error('name', f'{subnet} is the reverse zone "{name}", not "{typed}". '
+                                       f'Clear the zone name or the subnet.')
+                return cleaned
+            cleaned.update(name=name, zone_type=Zone.ZoneType.REVERSE, ip_version=version)
+        elif not cleaned.get('name') and 'name' not in self.errors:
+            self.add_error('name', 'Enter the zone name, e.g. example.com, or a subnet for a reverse zone.')
+        return cleaned
 
 
 class RecordForm(forms.ModelForm):
@@ -60,6 +91,13 @@ class RecordForm(forms.ModelForm):
             'priority':    forms.NumberInput(attrs={**_NUMBER, 'placeholder': '10'}),
             'value':       forms.Textarea(attrs={'class': 'form-input form-textarea', 'rows': 3}),
         }
+
+    sync_ptr = forms.BooleanField(
+        required=False,
+        label='Create or update the PTR record',
+        help_text='A/AAAA only: point the reverse (PTR) record for this address at this '
+                  'name, in whichever reverse zone covers it.',
+    )
 
 
 class UserCreateForm(UserCreationForm):

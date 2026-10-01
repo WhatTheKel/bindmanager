@@ -468,7 +468,8 @@
           <table class="param-table">
             <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
             <tbody>
-              <tr><td class="param-name">name</td><td class="param-type">string</td><td class="param-req">required</td><td>Fully-qualified domain name, e.g. <code>example.com</code></td></tr>
+              <tr><td class="param-name">name</td><td class="param-type">string</td><td class="param-req">required</td><td>Fully-qualified domain name, e.g. <code>example.com</code>. Omit when sending <code>subnet</code></td></tr>
+              <tr><td class="param-name">subnet</td><td class="param-type">string</td><td class="param-opt">optional</td><td>Reverse zone from a subnet: <code>192.0.2.0/24</code> → <code>2.0.192.in-addr.arpa</code>. Sets <code>name</code>, <code>zone_type</code> and <code>ip_version</code>. IPv4 <code>/8</code>, <code>/16</code>, <code>/24</code>; IPv6 a multiple of 4</td></tr>
               <tr><td class="param-name">zone_type</td><td class="param-type">string</td><td class="param-req">required</td><td><code>forward</code> or <code>reverse</code></td></tr>
               <tr><td class="param-name">ip_version</td><td class="param-type">integer</td><td class="param-opt">optional</td><td><code>4</code> or <code>6</code> (default <code>4</code>)</td></tr>
               <tr><td class="param-name">refresh</td><td class="param-type">integer</td><td class="param-opt">optional</td><td>SOA refresh interval in seconds</td></tr>
@@ -661,6 +662,7 @@
               <tr><td class="param-name">ttl</td><td class="param-type">integer</td><td class="param-opt">optional</td><td>TTL in seconds. Omit to inherit the zone default</td></tr>
               <tr><td class="param-name">priority</td><td class="param-type">integer</td><td class="param-opt">optional</td><td>Required for MX and SRV records</td></tr>
               <tr><td class="param-name">is_active</td><td class="param-type">boolean</td><td class="param-opt">optional</td><td>Include in zone file (default <code>true</code>)</td></tr>
+              <tr><td class="param-name">sync_ptr</td><td class="param-type">boolean</td><td class="param-opt">optional</td><td>A/AAAA only: also create or update the PTR record in the reverse zone covering the address, creating that zone (<code>/24</code> or <code>/64</code>) if there is none (on create and update; default <code>false</code>). The response lists what changed under <code>ptr</code></td></tr>
             </tbody>
           </table>
           <div class="ep-label">Example — add an A record</div>

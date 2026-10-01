@@ -4,12 +4,14 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.views import redirect_to_login
 from django.contrib.auth.models import User
 from django.contrib import messages
+from django.db import transaction
 from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.urls import reverse
 
 from .models import Zone, Record, NameServer, AuditLog
 from .forms import ZoneForm, RecordForm, NameServerForm, UserCreateForm, UserEditForm
+from .ptr import snapshot, sync_ptr
 
 
 def staff_required(view_func):
@@ -158,19 +160,44 @@ def zone_delete(request, pk):
 
 # ── Records ──────────────────────────────────────────────────────
 
+_PTR_AUDIT = {
+    'create': AuditLog.Action.CREATE,
+    'update': AuditLog.Action.UPDATE,
+    'delete': AuditLog.Action.DELETE,
+}
+
+
+def _sync_ptr(request, record, old=None):
+    """Run sync_ptr() for a saved A/AAAA record; audit and report each change."""
+    for change in sync_ptr(record, user=request.user, old=old):
+        if change.action in _PTR_AUDIT:
+            _audit(request, _PTR_AUDIT[change.action], change.entity_type, change.entity_id,
+                   f'{change.message} (from {record.record_type} "{record.name}" in {record.zone.name})')
+            messages.success(request, change.message)
+        elif change.action == 'warning':
+            messages.warning(request, change.message)
+        else:
+            messages.info(request, change.message)
+
+
 @staff_required
 def record_add(request, zone_pk):
     zone = get_object_or_404(Zone, pk=zone_pk)
     # Zone set up front so Record.clean() can check for conflicting records.
-    form = RecordForm(request.POST or None, instance=Record(zone=zone))
+    # Default to A, the usual case, so its PTR option shows straight away.
+    form = RecordForm(request.POST or None, instance=Record(zone=zone),
+                      initial={'record_type': Record.RecordType.A})
     if form.is_valid():
-        record = form.save(commit=False)
-        record.zone = zone
-        record.created_by = request.user
-        record.save()
-        _audit(request, AuditLog.Action.CREATE, 'record', record.pk,
-               f'Added {record.record_type} "{record.name}" to {zone.name}')
-        messages.success(request, f'{record.record_type} record added.')
+        with transaction.atomic():   # the record and its PTR/reverse zone together
+            record = form.save(commit=False)
+            record.zone = zone
+            record.created_by = request.user
+            record.save()
+            _audit(request, AuditLog.Action.CREATE, 'record', record.pk,
+                   f'Added {record.record_type} "{record.name}" to {zone.name}')
+            messages.success(request, f'{record.record_type} record added.')
+            if form.cleaned_data.get('sync_ptr'):
+                _sync_ptr(request, record)
         return redirect('dns_manager:manage_zone_detail', pk=zone.pk)
     return render(request, 'manage/record_form.html', {
         'form': form, 'zone': zone, 'title': 'Add Record',
@@ -181,12 +208,16 @@ def record_add(request, zone_pk):
 def record_edit(request, zone_pk, pk):
     zone = get_object_or_404(Zone, pk=zone_pk)
     record = get_object_or_404(Record, pk=pk, zone=zone)
+    before = snapshot(record)   # the form rewrites the instance while validating
     form = RecordForm(request.POST or None, instance=record)
     if form.is_valid():
-        form.save()
-        _audit(request, AuditLog.Action.UPDATE, 'record', record.pk,
-               f'Updated {record.record_type} "{record.name}" in {zone.name}')
-        messages.success(request, 'Record updated.')
+        with transaction.atomic():
+            form.save()
+            _audit(request, AuditLog.Action.UPDATE, 'record', record.pk,
+                   f'Updated {record.record_type} "{record.name}" in {zone.name}')
+            messages.success(request, 'Record updated.')
+            if form.cleaned_data.get('sync_ptr'):
+                _sync_ptr(request, record, old=before)
         return redirect('dns_manager:manage_zone_detail', pk=zone.pk)
     return render(request, 'manage/record_form.html', {
         'form': form, 'zone': zone, 'record': record, 'title': 'Edit Record',
