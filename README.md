@@ -295,7 +295,7 @@ bindmanager/
 ├── tests/
 │   ├── conftest.py             # Shared fixtures (staff_user, regular_user, zone, nameserver)
 │   ├── test_agent_api.py       # NameServer API key + pull-agent endpoints (published versions) + agent rate limit (16 tests)
-│   ├── test_agent_version.py   # Agent reports its version; check-in recorded; Outdated/Unknown/Stale/Never shown (14 tests)
+│   ├── test_agent_version.py   # Agent reports its version; check-in recorded; Outdated/Unknown/Stale/Never shown; API-key copy button (15 tests)
 │   ├── test_bug_sweep.py       # Re-sync on zone/NS changes, name/priority/SRV validation, sync lock + audit de-dup, central cleanup, agent partial failure (67 tests)
 │   ├── test_generator.py       # Zone engine: _bump_serial, _quote_txt, build_zone, file layout (33 tests)
 │   ├── test_login_lockout.py   # Real client IP despite fake X-Forwarded-For; lockout before password; /api/token/ shares it (15 tests)
@@ -478,7 +478,7 @@ curl http://<host>:81/api/v1/zones/ \
 ## Running Tests
 
 ```bash
-# All tests (298 total)
+# All tests (299 total)
 pytest
 
 # One module

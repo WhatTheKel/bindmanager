@@ -138,3 +138,12 @@ def test_last_seen_wording():
     ns.agent_last_seen = timezone.now() - timezone.timedelta(minutes=3)
     assert ns.agent_last_seen_ago.endswith('minutes ago') and ns.agent_last_seen_ago.startswith('3')
     assert NameServer(name='m', address='192.0.2.2').agent_last_seen_ago == ''
+
+
+def test_nameserver_page_has_copy_button_with_full_key(client):
+    staff = User.objects.create_user('s', password='x', is_staff=True)
+    ns = NameServer.objects.create(name='ns.example', address='192.0.2.9')
+    client.force_login(staff)
+    html = client.get(reverse('dns_manager:manage_nameserver_list')).content.decode()
+    assert f'data-copy="{ns.api_key}"' in html
+    assert 'aria-label="Copy API key for ns.example"' in html

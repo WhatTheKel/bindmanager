@@ -136,6 +136,57 @@
       });
     });
 
+    /* ── Copy buttons ([data-copy]) ────────────────────────── */
+    // navigator.clipboard only exists on HTTPS / localhost; on plain
+    // http://host:81 fall back to selecting a hidden textarea + execCommand.
+    function copyText(text) {
+      if (navigator.clipboard && window.isSecureContext) {
+        return navigator.clipboard.writeText(text);
+      }
+      return new Promise(function (resolve, reject) {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        var ok = false;
+        try { ok = document.execCommand('copy'); } catch (_) {}
+        document.body.removeChild(ta);
+        ok ? resolve() : reject(new Error('copy failed'));
+      });
+    }
+
+    $$('[data-copy]').forEach(function (btn) {
+      var label = $('.copy-label', btn);
+      var timer;
+      btn.addEventListener('click', function () {
+        clearTimeout(timer);
+        btn.classList.remove('copied', 'copy-failed');
+        copyText(btn.dataset.copy).then(function () {
+          btn.classList.add('copied');
+          if (label) label.textContent = 'Copied';
+        }, function () {
+          // Couldn't reach the clipboard: select the key so Ctrl+C works
+          btn.classList.add('copy-failed');
+          if (label) label.textContent = 'Press Ctrl+C';
+          var key = btn.parentNode.querySelector('.key-cell');
+          if (key) {
+            var range = document.createRange();
+            range.selectNodeContents(key);
+            var sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+          }
+        });
+        timer = setTimeout(function () {
+          btn.classList.remove('copied', 'copy-failed');
+          if (label) label.textContent = '';
+        }, 2000);
+      });
+    });
+
     /* ── User menu dropdown ────────────────────────────────── */
     var trigger  = $('#user-menu-trigger');
     var dropdown = $('#user-menu-dropdown');

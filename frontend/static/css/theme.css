@@ -717,7 +717,33 @@ th {
 
 
 /* Long API keys: shown shortened, full value still selectable/copyable */
-.key-cell { display: inline-block; max-width: 11ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+.key-cell { display: inline-block; max-width: 8ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+
+/* Copy-to-clipboard button (e.g. nameserver API keys) */
+.copy-btn {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0; margin-left: .2rem;
+  vertical-align: middle;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--surface-2); color: var(--text-muted);
+  font: inherit; font-size: .7rem; cursor: pointer;
+  transition: color .15s, border-color .15s, background .15s;
+}
+.copy-btn:hover { color: var(--primary); border-color: var(--primary); }
+.copy-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.copy-btn .icon-done { display: none; }
+.copy-btn.copied { color: var(--success); border-color: var(--success); }
+.copy-btn.copied .icon-copy { display: none; }
+.copy-btn.copied .icon-done { display: inline; }
+.copy-btn.copy-failed { color: var(--warning); border-color: var(--warning); }
+/* "Copied" / "Press Ctrl+C" bubble above the button — no layout shift */
+.copy-label {
+  position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%);
+  padding: .1rem .45rem; border-radius: 5px; white-space: nowrap;
+  background: var(--text); color: var(--surface); font-size: .7rem; pointer-events: none;
+}
+.copy-label:empty { display: none; }
 
 /* ── Small tap targets ────────────────────────────────────────── */
 .breadcrumbs a { display: inline-block; padding: .2rem 0; }
