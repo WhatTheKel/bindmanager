@@ -286,6 +286,7 @@ Part 1 again.
 | Zones stay unsynced after the update | `docker compose logs worker` for errors; check the "Sync dirty zones" periodic task is still enabled in `/admin/` → **Periodic tasks** |
 | Login page says *Too many failed login attempts* | 10 failed logins from that IP in 5 minutes; it clears 5 minutes after the last one. To clear it now: `docker compose exec web python manage.py shell -c "from django.core.cache import cache; cache.delete('login_fail:<client-ip>')"` (the IP is in the audit log's failed-login entries) |
 | Manage → Nameservers shows an agent as *Stale* | That nameserver's agent stopped checking in: `systemctl status bindmanager-agent.timer` and `journalctl -u bindmanager-agent -n 50` on it |
+| A script gets `401` with `Authorization: Token bmt_…` | The token was revoked, has expired, or its user was deactivated — the response's `detail` says which. Create a new one under user menu → **API tokens** |
 | Nameserver agent logs `401` after an update | The app didn't change keys on update — check `api_key` in `config.ini` still matches the nameserver's key in **Manage > Nameservers** |
 
 ---

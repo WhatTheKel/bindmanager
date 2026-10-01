@@ -37,7 +37,7 @@ new versions later, follow `UPDATING.md`.
 | Layer | Technology |
 |---|---|
 | Backend | Django 4.2 LTS + Django REST Framework |
-| Auth | JWT (SimpleJWT) + Django session auth + SSO (Okta / Authentik) |
+| Auth | Django session auth + SSO (Okta / Authentik); API: personal API tokens, JWT (SimpleJWT) or session |
 | Database | MySQL 8.0 / MariaDB 10.11 **or** PostgreSQL 16 (selectable via `DB_ENGINE` in `.env`) |
 | DB driver | `mysqlclient` (MySQL/MariaDB) or `psycopg2-binary` (PostgreSQL) |
 | Cache / Broker | Redis 7+ (external, not containerised) |
@@ -152,6 +152,10 @@ SESSION_COOKIE_AGE=28800
 # which X-Forwarded-For entry is the real client IP (login lockout, API rate
 # limits, audit log).
 TRUSTED_PROXY_COUNT=1
+
+# Longest expiry users may choose for personal API tokens (days, default 90;
+# 0 also allows tokens that never expire — not recommended).
+API_TOKEN_MAX_DAYS=90
 ```
 
 ### 4. Build and Start
@@ -186,11 +190,12 @@ docker compose exec web python manage.py createsuperuser
 | `http://<host>:81/manage/audit/` | Audit log |
 | `http://<host>:81/manage/users/` | User management (`is_superuser` only) |
 | `http://<host>:81/api/v1/` | Interactive API reference (`is_superuser` only) |
-| `http://<host>:81/api/token/` | Obtain JWT token (POST) |
+| `http://<host>:81/account/api-tokens/` | Your personal API tokens (any logged-in user — also via the user menu) |
+| `http://<host>:81/api/token/` | Obtain JWT token (POST; local accounts with a password) |
 | `http://<host>:81/admin/` | Django admin panel (`is_superuser` only) |
 
 The footer of every page after login shows the running version (e.g.
-`v0.2.5`), read from the `VERSION` file — see [Versioning](#versioning).
+`v0.2.7`), read from the `VERSION` file — see [Versioning](#versioning).
 
 ### Roles
 
@@ -200,7 +205,9 @@ The footer of every page after login shows the running version (e.g.
 | **Staff** | Everything above, plus the Dashboard and **Manage** (zones, records, nameservers, audit log) and API writes |
 | **Superuser** | Everything above, plus **Users**, the API reference page and `/admin/`. A superuser is always saved as staff too |
 
-The role is shown in the user menu (top right) and in **Manage → Users**.
+Every role can create personal API tokens (user menu → **API tokens**); a
+token has exactly its owner's role. The role is shown in the user menu
+(top right) and in **Manage → Users**.
 `createsuperuser` makes a superuser; users added in Manage → Users get
 whatever boxes you tick; first-time SSO users become Staff (see [SSO](#sso-optional)).
 
@@ -211,13 +218,15 @@ whatever boxes you tick; first-time SSO users become Staff (see [SSO](#sso-optio
 ```
 bindmanager/
 ├── apps/
-│   ├── accounts/               # Auth: SmartLoginView, login/logout signals, SSO backends
+│   ├── accounts/               # Auth: login, lockout, SSO backends, personal API tokens
 │   │   ├── backends.py         # AuthentikOpenIdConnect — OIDC backend for Authentik
 │   │   ├── context_processors.py  # Injects SSO flags, branding vars (logo, favicon, app name) and APP_VERSION into all templates
 │   │   ├── pipeline.py         # SSO pipeline: ignore_session_user (no linking to a logged-in account), set_staff_flag
 │   │   ├── signals.py          # Writes AuditLog on login / logout / failed login; superuser ⇒ staff
 │   │   ├── client_ip.py        # Real client IP from X-Forwarded-For (TRUSTED_PROXY_COUNT from the right)
 │   │   ├── lockout.py          # Per-IP failed-login lockout (Redis), shared by login page and /api/token/
+│   │   ├── migrations/
+│   │   │   └── 0001_api_tokens.py
 │   │   ├── models.py           # ApiToken — personal API tokens (hash only)
 │   │   ├── token_auth.py       # DRF auth for "Authorization: Token bmt_…"
 │   │   └── views.py            # SmartLoginView, LockoutTokenObtainPairView, API tokens page
@@ -277,6 +286,8 @@ bindmanager/
 │   └── templates/
 │       ├── base.html           # App shell: topbar, nav, footer (with version), toasts, delete modal
 │       ├── dashboard.html      # Staff dashboard (standalone, no sidebar)
+│       ├── accounts/
+│       │   └── api_tokens.html # Create / list / revoke your personal API tokens (token shown once)
 │       ├── registration/
 │       │   └── login.html      # Custom split-panel login page
 │       ├── api/
@@ -291,7 +302,7 @@ bindmanager/
 │           ├── dashboard.html  # Unused — manage_views.dashboard renders top-level dashboard.html instead
 │           ├── nameserver_form.html / nameserver_list.html
 │           ├── record_form.html
-│           ├── user_form.html  # User create / edit form
+│           ├── user_form.html  # User create / edit form (+ the user's API tokens, Revoke all)
 │           ├── user_list.html  # User manager list (superuser only)
 │           └── zone_detail.html / zone_form.html / zone_list.html
 ├── tests/
@@ -532,6 +543,7 @@ The following controls are active out of the box:
 | API rate limiting | DRF throttling — 20/min anonymous, 300/min authenticated, 300/min per pull-agent key, applied to every REST endpoint |
 | Audit log integrity | Append-only from application code; add/change/delete disabled in the Django admin |
 | API docs | `/api/v1/` requires `is_superuser=True` — staff-only users are redirected to login |
+| Personal API tokens | Only a SHA-256 hash is stored; shown once at creation; expire after at most `API_TOKEN_MAX_DAYS` (default 90); refused for deactivated users; revocable by the owner, or all at once by a superuser; create/revoke audited without the token |
 | Dependency pinning | All packages pinned to exact versions in `requirements.txt` |
 | Least privilege | Container drops to a non-root `django` user at runtime via `gosu` |
 
@@ -603,6 +615,8 @@ Env-var URLs take priority over volume files. Customers who prefer CDN delivery 
 SSO users are automatically created with `is_staff=True` (granting access to `/manage/` and `/dashboard/`). `is_superuser=True` can be granted via the User Manager page (`/manage/users/`) by an existing superuser. `/admin/` requires `is_superuser=True`. A superuser is always saved as staff too.
 
 Each SSO identity gets its own account. It is never linked to an existing local account, whether by matching email or because someone was already logged in when the SSO sign-in completed. To give an SSO user more rights, edit their own account in **Manage → Users**.
+
+SSO accounts have no BindManager password, so `/api/token/` (JWT) isn't available to them. To use the API they create a **personal API token** (user menu → **API tokens**) — see [REST API](#rest-api). When someone leaves, deactivate them in **Manage → Users** (or revoke their tokens there): BindManager isn't told when an account is disabled in Authentik/Okta.
 
 SSO is disabled by default. When enabled, a branded **"Continue with Okta / Authentik"** button appears on the login page. To enable, set the relevant vars in `.env`:
 
