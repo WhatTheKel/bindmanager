@@ -14,10 +14,18 @@
 <div class="page-header">
   <div>
     <div class="page-title">Nameservers</div>
-    <div class="page-subtitle">{{ nameservers|length }} configured</div>
+    <div class="page-subtitle">{{ nameservers|length }} configured{% if latest_agent_version %} &bull; latest agent {{ latest_agent_version }}{% endif %}</div>
   </div>
   <a href="{% url 'dns_manager:manage_nameserver_add' %}" class="btn btn-primary">+ Add Nameserver</a>
 </div>
+
+{% if agents_need_attention %}
+<div class="alert alert-warning" style="margin-bottom:1rem">
+  {{ agents_need_attention }} nameserver{{ agents_need_attention|pluralize }} need{{ agents_need_attention|pluralize:"s," }} attention:
+  an agent that is outdated, has never checked in, or stopped checking in.
+  To update an agent, see UPDATING.md, Part 2.
+</div>
+{% endif %}
 
 <div class="card">
   {% if nameservers %}
@@ -27,9 +35,9 @@
         <tr>
           <th>Name</th>
           <th>Address</th>
-          <th>Config Dir</th>
-          <th>Agent API Key</th>
+          <th>API Key</th>
           <th>Status</th>
+          <th>Agent</th>
           <th>Zones</th>
           <th style="text-align:right">Actions</th>
         </tr>
@@ -39,14 +47,35 @@
         <tr>
           <td class="monospace" style="font-weight:600">{{ ns.name }}</td>
           <td class="monospace">{{ ns.address }}</td>
-          <td class="monospace" style="color:var(--text-muted)">{{ ns.config_dir }}</td>
-          <td class="monospace text-sm" style="color:var(--text-muted)" title="Used by the pull agent script's Authorization: ApiKey header">{{ ns.api_key }}</td>
+          <td class="monospace text-sm" style="color:var(--text-muted)"><span class="key-cell" title="Double-click to select the full key (for the agent's config.ini)">{{ ns.api_key }}</span></td>
           <td>
             {% if ns.is_active %}
               <span class="badge badge-green"><span class="dot dot-green"></span>Active</span>
             {% else %}
               <span class="badge badge-neutral">Inactive</span>
             {% endif %}
+          </td>
+          <td style="min-width:9rem">
+            {% with st=ns.agent_status %}
+            {% if st == 'current' %}
+              <span class="monospace">{{ ns.agent_version }}</span>
+            {% elif st == 'outdated' %}
+              <span class="monospace">{{ ns.agent_version }}</span>
+              <span class="badge badge-amber" title="Older than the agent this app ships ({{ latest_agent_version }})">Outdated</span>
+            {% elif st == 'unknown' %}
+              <span class="badge badge-amber" title="Agent from before 0.2.4, which doesn't report its version — update it">Unknown</span>
+            {% else %}
+              <span class="text-muted">&mdash;</span>
+            {% endif %}
+            {% endwith %}
+            <div class="text-xs text-muted" style="margin-top:.2rem">
+            {% if ns.agent_last_seen %}
+              <span title="{{ ns.agent_last_seen|date:'Y-m-d H:i:s' }}">checked in {{ ns.agent_last_seen_ago }}</span>
+              {% if ns.agent_is_stale %}<span class="badge badge-red" title="No check-in for over {{ stale_minutes }} minutes — is the agent timer running?">Stale</span>{% endif %}
+            {% elif ns.is_active %}
+              <span class="badge badge-neutral" title="The agent on this server hasn't called the app yet">Never</span>
+            {% endif %}
+            </div>
           </td>
           <td>{{ ns.zones.all|length }}</td>
           <td style="white-space:nowrap;text-align:right">

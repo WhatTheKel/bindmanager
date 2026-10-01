@@ -276,7 +276,7 @@ python3.9 /opt/bindmanager-agent/bindmanager_agent.py \
 With no zones assigned yet, success looks like:
 
 ```
-INFO dry-run: 0 changed, 0 removed, topology_changed=False
+INFO dry-run: 0 changed, 0 removed
 ```
 
 That line alone proves the VM reached the app **and** the API key was
@@ -288,6 +288,9 @@ systemctl daemon-reload
 systemctl enable --now bindmanager-agent.timer
 systemctl list-timers bindmanager-agent.timer
 ```
+
+Within 2 minutes, **Manage → Nameservers** in the app shows this server's
+agent version and a recent *Last check-in*.
 
 ---
 
@@ -401,10 +404,12 @@ agent/API issues that aren't OS-specific (401s, 404s, empty zone lists).
 ## Updating the agent later
 
 Most BindManager updates only touch the app host and need nothing here.
-The version in the app's footer is the app's version; it doesn't say
-whether the agent changed. Check that directly —
-`git fetch && git diff --stat HEAD origin/main -- agents/` in
-`/root/bindmanager` (empty = nothing to do). Only when it lists files:
+To see whether this server's agent needs updating, open **Manage →
+Nameservers** in the app: the *Agent* column shows the version it last
+reported, marked **Outdated** (or **Unknown** for agents from
+before 0.2.4) when the app ships a newer one. On this VM,
+`python3.9 /opt/bindmanager-agent/bindmanager_agent.py --version` prints
+it. Only when it needs updating:
 
 ```bash
 cd /root/bindmanager && git pull

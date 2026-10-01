@@ -716,6 +716,9 @@ th {
 }
 
 
+/* Long API keys: shown shortened, full value still selectable/copyable */
+.key-cell { display: inline-block; max-width: 11ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+
 /* ── Small tap targets ────────────────────────────────────────── */
 .breadcrumbs a { display: inline-block; padding: .2rem 0; }
 .footer a { display: inline-block; padding: .3rem .15rem; }

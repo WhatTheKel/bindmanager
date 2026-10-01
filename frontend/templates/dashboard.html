@@ -17,6 +17,13 @@
   </div>
 
   <!-- Stats row -->
+  {% if agents_need_attention %}
+  <div class="alert alert-warning" style="margin-bottom:1.25rem">
+    {{ agents_need_attention }} nameserver agent{{ agents_need_attention|pluralize }} need{{ agents_need_attention|pluralize:"s," }} attention (outdated or not checking in).
+    <a href="{% url 'dns_manager:manage_nameserver_list' %}">View nameservers →</a>
+  </div>
+  {% endif %}
+
   <div class="stats-row">
     <div class="stat-card">
       <div class="stat-icon">

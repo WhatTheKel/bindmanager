@@ -1,4 +1,5 @@
 import functools
+from django.conf import settings
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.views import redirect_to_login
 from django.contrib.auth.models import User
@@ -47,6 +48,11 @@ def _audit(request, action, entity_type, entity_id, detail):
 
 # ── Dashboard ────────────────────────────────────────────────────
 
+def _agents_needing_attention(nameservers) -> int:
+    return sum(1 for ns in nameservers
+               if ns.is_active and (ns.agent_status != 'current' or ns.agent_is_stale))
+
+
 @staff_required
 def dashboard(request):
     zone_stats = Zone.objects.aggregate(
@@ -60,6 +66,7 @@ def dashboard(request):
         'dirty_count':  zone_stats['dirty_count'],
         'recent_logs':  AuditLog.objects.select_related('user').order_by('-created_at')[:8],
         'dirty_zones':  Zone.objects.filter(is_dirty=True).order_by('name')[:5],
+        'agents_need_attention': _agents_needing_attention(NameServer.objects.all()),
     })
 
 
@@ -208,8 +215,14 @@ def record_delete(request, zone_pk, pk):
 
 @staff_required
 def nameserver_list(request):
-    nameservers = NameServer.objects.order_by('name')
-    return render(request, 'manage/nameserver_list.html', {'nameservers': nameservers})
+    nameservers = list(NameServer.objects.prefetch_related('zones').order_by('name'))
+    needs_attention = _agents_needing_attention(nameservers)
+    return render(request, 'manage/nameserver_list.html', {
+        'nameservers': nameservers,
+        'latest_agent_version': settings.LATEST_AGENT_VERSION,
+        'stale_minutes': settings.AGENT_STALE_AFTER_MINUTES,
+        'agents_need_attention': needs_attention,
+    })
 
 
 @staff_required

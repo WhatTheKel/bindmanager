@@ -118,7 +118,7 @@ Test, then enable:
 
 ```bash
 python3.9 /opt/bindmanager-agent/bindmanager_agent.py --config /etc/bindmanager-agent/config.ini --dry-run -v
-# want: "dry-run: 0 changed, 0 removed, topology_changed=False"
+# want: "dry-run: 0 changed, 0 removed"
 systemctl daemon-reload && systemctl enable --now bindmanager-agent.timer
 ```
 

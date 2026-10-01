@@ -66,9 +66,11 @@ only the zones assigned to it, validating, and reloading locally.
 
 ## Updating
 
-Only needed when a BindManager update changes `agents/` — check with
-`git fetch && git diff --stat HEAD origin/main -- agents/` (the app version
-in the footer doesn't tell you; the agent has no version number). Copy the new
+**Manage → Nameservers** in the app shows each agent's reported version
+and last check-in, and marks agents older than the one the app ships as
+**Outdated** (**Unknown** for agents from before 0.2.4, which
+don't report a version). `bindmanager_agent.py --version` prints it
+locally. Only those need updating: copy the new
 `bindmanager_agent.py` over the old one — no restart, the next timer/cron
 run picks it up. Leave `config.ini` alone (add any new settings from
 `config.example.ini` by hand). If you re-copy the systemd unit, re-apply

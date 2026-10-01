@@ -212,6 +212,19 @@ try:
 except OSError:
     APP_VERSION = ''
 
+# The pull agent version this release ships (AGENT_VERSION in
+# agents/bindmanager_agent.py). Nameservers reporting an older one are
+# flagged as outdated in Manage > Nameservers.
+import re as _re
+try:
+    _m = _re.search(r"^AGENT_VERSION = '([^']+)'",
+                    (BASE_DIR / 'agents' / 'bindmanager_agent.py').read_text(), _re.M)
+    LATEST_AGENT_VERSION = _m.group(1) if _m else ''
+except OSError:
+    LATEST_AGENT_VERSION = ''
+# An agent that hasn't checked in for this long is flagged (timer runs every 2 min)
+AGENT_STALE_AFTER_MINUTES = 10
+
 # SSO feature flags — explicit opt-in; backends are not registered unless enabled
 OKTA_SSO_ENABLED = config('OKTA_ENABLED', default=False, cast=bool)
 AUTHENTIK_SSO_ENABLED = config('AUTHENTIK_ENABLED', default=False, cast=bool)

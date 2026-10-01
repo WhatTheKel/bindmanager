@@ -71,7 +71,9 @@ no `controls{}` block and no port ever exposed past `127.0.0.1`.
 ## Updating
 
 Only needed when a BindManager update changes `agents/` or this
-directory — the app's version number doesn't track the agent. Check first:
+directory. **Manage → Nameservers** in the app marks this server's agent
+**Outdated** (or **Unknown**) when the app ships a newer one; to
+check from here instead:
 
 ```bash
 git fetch && git diff --stat HEAD origin/main -- agents/ docker/bind9-node/ docker-compose.node.yml

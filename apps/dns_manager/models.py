@@ -13,6 +13,14 @@ from .validators import (
 )
 
 
+def _version_tuple(version: str) -> tuple:
+    parts = []
+    for p in version.split('.'):
+        digits = ''.join(c for c in p if c.isdigit())
+        parts.append(int(digits) if digits else 0)
+    return tuple(parts)
+
+
 def _mark_zones_dirty(zone_qs):
     """Queue zones for re-sync. Bumps updated_at too, so a sync already in
     progress sees the change and leaves the zone dirty (see tasks.sync_zone)."""
@@ -28,6 +36,9 @@ class NameServer(models.Model):
     # which zones it's allowed to fetch. Generated once on first save.
     api_key = models.CharField(max_length=64, unique=True, blank=True, editable=False)
     is_active = models.BooleanField(default=True)
+    # Reported by the pull agent on each run (see AgentZoneListView)
+    agent_version = models.CharField(max_length=32, blank=True, default='')
+    agent_last_seen = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -50,6 +61,39 @@ class NameServer(models.Model):
         # Its NS records disappear from every zone it served
         _mark_zones_dirty(self.zones.all())
         return super().delete(*args, **kwargs)
+
+    @property
+    def agent_status(self) -> str:
+        """'never' (no check-in yet), 'unknown' (agent too old to report a
+        version), 'outdated' (older than the agent this app ships) or 'current'."""
+        from django.conf import settings
+        if not self.agent_last_seen:
+            return 'never'
+        if not self.agent_version:
+            return 'unknown'
+        latest = getattr(settings, 'LATEST_AGENT_VERSION', '')
+        if latest and _version_tuple(self.agent_version) < _version_tuple(latest):
+            return 'outdated'
+        return 'current'
+
+    @property
+    def agent_last_seen_ago(self) -> str:
+        """'just now' / '3 minutes ago' — timesince alone says '0 minutes'."""
+        from django.utils.timesince import timesince
+        if not self.agent_last_seen:
+            return ''
+        if (timezone.now() - self.agent_last_seen).total_seconds() < 60:
+            return 'just now'
+        return f'{timesince(self.agent_last_seen)} ago'
+
+    @property
+    def agent_is_stale(self) -> bool:
+        """True if an active nameserver's agent hasn't checked in recently."""
+        from django.conf import settings
+        if not self.is_active or not self.agent_last_seen:
+            return False
+        limit = timezone.timedelta(minutes=getattr(settings, 'AGENT_STALE_AFTER_MINUTES', 10))
+        return timezone.now() - self.agent_last_seen > limit
 
     def regenerate_api_key(self):
         self.api_key = secrets.token_hex(32)

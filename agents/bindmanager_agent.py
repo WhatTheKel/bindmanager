@@ -38,6 +38,12 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
+# Bump to the app release number whenever this file changes (UPDATING.md,
+# "Releasing"). Sent as the User-Agent on every request; the app shows it
+# per nameserver in Manage > Nameservers and flags agents older than its own
+# copy of this file.
+AGENT_VERSION = '0.2.4'
+
 log = logging.getLogger('bindmanager_agent')
 
 # Matches the "; Serial" comment zone.j2 renders next to the SOA serial
@@ -94,7 +100,12 @@ class ApiError(Exception):
 def _api_get(cfg: Config, path: str) -> dict | list:
     req = urllib.request.Request(
         f'{cfg.api_url}{path}',
-        headers={'Authorization': f'ApiKey {cfg.api_key}', 'Accept': 'application/json'},
+        headers={
+            'Authorization': f'ApiKey {cfg.api_key}',
+            'Accept': 'application/json',
+            'User-Agent': f'bindmanager-agent/{AGENT_VERSION} '
+                          f'(python {sys.version_info.major}.{sys.version_info.minor})',
+        },
     )
     try:
         with urllib.request.urlopen(req, timeout=cfg.timeout) as resp:
@@ -256,6 +267,7 @@ def main() -> int:
     parser.add_argument('--config', type=Path, default=Path('/etc/bindmanager-agent/config.ini'))
     parser.add_argument('--dry-run', action='store_true', help="Report what would change, touch nothing")
     parser.add_argument('-v', '--verbose', action='store_true')
+    parser.add_argument('--version', action='version', version=f'bindmanager-agent {AGENT_VERSION}')
     args = parser.parse_args()
 
     logging.basicConfig(

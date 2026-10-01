@@ -8,9 +8,13 @@ from apps.dns_manager.validators import (
 
 
 class NameServerSerializer(serializers.ModelSerializer):
+    agent_status = serializers.CharField(read_only=True)
+
     class Meta:
         model = NameServer
-        fields = ['id', 'name', 'address', 'config_dir', 'is_active']
+        fields = ['id', 'name', 'address', 'config_dir', 'is_active',
+                  'agent_version', 'agent_last_seen', 'agent_status']
+        read_only_fields = ['agent_version', 'agent_last_seen']
 
 
 class RecordSerializer(serializers.ModelSerializer):

@@ -1,3 +1,6 @@
+import re
+
+from django.utils import timezone
 from rest_framework import serializers, throttling
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.exceptions import NotFound
@@ -20,6 +23,22 @@ class AgentRateThrottle(throttling.SimpleRateThrottle):
     def get_cache_key(self, request, view):
         ident = getattr(request.auth, 'pk', None) or self.get_ident(request)
         return self.cache_format % {'scope': self.scope, 'ident': ident}
+
+
+_AGENT_UA_RE = re.compile(r'bindmanager-agent/([0-9A-Za-z.+-]{1,32})')
+
+
+def record_agent_checkin(request) -> None:
+    """Remember when this nameserver's agent last called in, and its version.
+
+    Agents before 0.2.4 send Python's default User-Agent, so their version
+    is stored as '' (shown as "unknown"). A queryset update: no save()
+    signals, and updated_at stays as the time the nameserver was edited.
+    """
+    m = _AGENT_UA_RE.search(request.headers.get('User-Agent', ''))
+    type(request.auth).objects.filter(pk=request.auth.pk).update(
+        agent_version=m.group(1) if m else '', agent_last_seen=timezone.now(),
+    )
 
 
 class AgentZoneListSerializer(serializers.ModelSerializer):
@@ -60,6 +79,11 @@ class AgentZoneListView(ListAPIView):
 
     def get_queryset(self):
         return self.request.auth.zones.filter(published_serial__isnull=False).order_by('name')
+
+    def list(self, request, *args, **kwargs):
+        # Every agent run starts with this call, so it doubles as a check-in
+        record_agent_checkin(request)
+        return super().list(request, *args, **kwargs)
 
 
 class AgentZoneDetailView(RetrieveAPIView):

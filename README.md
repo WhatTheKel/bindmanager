@@ -267,6 +267,7 @@ bindmanager/
 │           └── zone_detail.html / zone_form.html / zone_list.html
 ├── tests/
 │   ├── conftest.py             # Shared fixtures (staff_user, regular_user, zone, nameserver)
+│   ├── test_agent_version.py   # Agent reports its version; check-in recorded; Outdated/Unknown/Stale/Never shown (14 tests)
 │   ├── test_bug_sweep.py       # Re-sync on zone/NS changes, name/priority/SRV validation, sync lock + audit de-dup, central cleanup, agent partial failure (67 tests)
 │   ├── test_generator.py       # Zone engine: _bump_serial, _quote_txt, build_zone, file layout (33 tests)
 │   ├── test_permissions.py     # IsStaffOrReadOnly (21 tests)
@@ -410,7 +411,7 @@ curl http://<host>:81/api/v1/zones/ \
   -H "Authorization: Bearer <access_token>"
 ```
 
-**Permissions:** All endpoints require authentication. Write operations (POST / PUT / PATCH / DELETE) additionally require `is_staff=True`. Read operations are available to any authenticated user. The `/api/v1/agent/` endpoints authenticate with a nameserver's Agent API key instead and only return zones assigned to that nameserver that have already synced cleanly.
+**Permissions:** All endpoints require authentication. Write operations (POST / PUT / PATCH / DELETE) additionally require `is_staff=True`. Read operations are available to any authenticated user. The `/api/v1/agent/` endpoints authenticate with a nameserver's Agent API key instead and return the last validated version of each zone assigned to that nameserver (edits still pending sync are never served). Each agent run also records the agent's version and check-in time, shown in **Manage → Nameservers**.
 
 **Rate limiting:** Anonymous requests 20/min, authenticated requests 300/min, pull-agent requests 300/min per nameserver key — applied to every endpoint.
 
@@ -438,7 +439,7 @@ curl http://<host>:81/api/v1/zones/ \
 ## Running Tests
 
 ```bash
-# All tests (263 total)
+# All tests (277 total)
 pytest
 
 # One module

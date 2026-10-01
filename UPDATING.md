@@ -132,9 +132,16 @@ survived the update.
 ## Part 2 — Update each nameserver's agent
 
 **Skip this entirely if 0.1 listed nothing under `agents/`** (or, for Docker
-nameservers, `docker/bind9-…` and their compose file). The version number
-in the footer is the app's; it doesn't tell you whether the agent changed. The agent talks
-to a stable API, so app-only updates never require touching nameservers.
+nameservers, `docker/bind9-…` and their compose file). The agent talks to a
+stable API, so app-only updates never require touching nameservers.
+
+**Which agents need it:** after updating the app, open **Manage →
+Nameservers**. The *Agent* column shows the version each nameserver's agent
+last reported (it checks in every 2 minutes), and the subtitle shows the
+latest agent version the app ships. Anything marked **Outdated** or
+**Unknown** (agents from before 0.2.4 don't report a version)
+should be updated below. **Stale** means the agent stopped checking in —
+look at its timer and journal.
 
 Pick the section that matches how that nameserver was installed.
 
@@ -154,8 +161,9 @@ run (within 2 minutes) uses the new version. Your `config.ini` is untouched.
 Check the next run:
 
 ```bash
+python3.9 /opt/bindmanager-agent/bindmanager_agent.py --version  # Debian: python3
 python3.9 /opt/bindmanager-agent/bindmanager_agent.py \
-  --config /etc/bindmanager-agent/config.ini --dry-run -v   # Debian: python3
+  --config /etc/bindmanager-agent/config.ini --dry-run -v
 journalctl -u bindmanager-agent --since '-5 min'
 ```
 
@@ -265,7 +273,12 @@ top of the repo. When pushing changes that users should pick up:
 1. Bump `VERSION` — `MAJOR.MINOR.PATCH`: patch for fixes, minor for new
    features, major for changes that need manual steps (new required `.env`
    settings, agent changes that must be rolled out together with the app).
-2. Commit it with the changes, then tag and push the tag:
+2. **If `agents/bindmanager_agent.py` changed** in this release, set its
+   `AGENT_VERSION` to the same number and copy the file to
+   `docker/bind9-agent/` and `docker/bind9-node/` (the three must stay
+   identical). That's what marks older agents as *Outdated* in Manage →
+   Nameservers. Leave it alone if the agent didn't change.
+3. Commit it with the changes, then tag and push the tag:
 
    ```bash
    git tag -a v0.2.0 -m "v0.2.0"
@@ -289,7 +302,7 @@ mysqldump -u root --single-transaction --routines bindmanager | gzip > /root/bac
 git pull
 docker compose up -d --build && docker compose restart nginx
 
-# Each nameserver — only if agents/ changed
+# Each nameserver — only if Manage → Nameservers shows its agent as Outdated/Unknown
 cd /root/bindmanager && git pull
 cmp agents/bindmanager_agent.py /opt/bindmanager-agent/bindmanager_agent.py || \cp -f agents/bindmanager_agent.py /opt/bindmanager-agent/
 ```
