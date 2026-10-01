@@ -256,6 +256,7 @@ bindmanager/
 │       ├── templatetags/
 │       │   └── dns_tags.py     # rtype_class filter + url_replace tag
 │       ├── urls.py             # All URL patterns
+│       ├── ptr.py              # Subnet → reverse zone name; create/update the PTR for an A/AAAA record
 │       ├── validators.py       # Zone/record name, value, target, priority checks + conflict/duplicate checks (UI, admin, API)
 │       ├── views.py            # Public read-only zone/record views
 │       └── zone_engine/
@@ -315,6 +316,7 @@ bindmanager/
 │   ├── test_login_lockout.py   # Real client IP despite fake X-Forwarded-For; lockout before password; /api/token/ shares it (15 tests)
 │   ├── test_models.py          # Zone, Record, AuditLog, NameServer (12 tests)
 │   ├── test_permissions.py     # IsStaffOrReadOnly (21 tests)
+│   ├── test_ptr.py             # Subnet → reverse zone name; PTR create/update/move with A/AAAA records, reverse zone auto-create, rollback on failure, form rows shown per type (UI + API) (48 tests)
 │   ├── test_record_targets.py  # CNAME/NS/PTR/MX/SRV targets: missing trailing dot fixed or rejected (25 tests)
 │   ├── test_sso_pipeline.py    # SSO never links to the session user or by email (4 tests)
 │   ├── test_superuser_staff.py # Superuser always saved as staff (4 tests)
@@ -385,6 +387,11 @@ If a sync fails, the zone stays *Pending Sync* and is retried on every scheduled
 Everything else is still validated by `named-checkzone` at sync time.
 
 **Zone contents you don't enter yourself:** each zone's `NS` records come from its assigned nameservers (their `name` field), and the SOA primary is the first assigned nameserver. If that name is inside the zone (e.g. `ns1.example.com` for `example.com`), add an `A` record for it — `named-checkzone` rejects the zone without that glue.
+
+**Reverse zones and PTR records:**
+
+- **Create a reverse zone from a subnet:** in *Add Zone*, leave the name blank and enter the subnet in *Subnet* — `192.0.2.0/24` becomes `2.0.192.in-addr.arpa`, `2001:db8::/32` becomes `8.b.d.0.1.0.0.2.ip6.arpa`, and the zone type and IP version are set for you. Reverse zones follow label boundaries, so IPv4 subnets must be `/8`, `/16` or `/24` and IPv6 prefixes a multiple of 4. The API takes the same thing as `"subnet"` on `POST /api/v1/zones/`.
+- **PTR with an A/AAAA record:** tick *Create or update the PTR record* when adding or editing an `A`/`AAAA` record (`"sync_ptr": true` in the API). The PTR goes into the most specific reverse zone that covers the address, pointing at the record's full name, with the same TTL. If the address already has one PTR it is updated; if it has several, they're left alone with a warning. When an edit changes the IP, this record's PTR at the old address is removed. If no reverse zone covers the address, one is created for its `/24` (IPv4) or `/64` (IPv6), served by the same nameservers as the record's zone; an existing wider reverse zone (e.g. a `/16`) is used instead when there is one. If the record's zone has no nameservers, the new reverse zone has none either and you're warned that it can't sync until you assign some. The record, its PTR and any new reverse zone are saved together: if one fails, none is saved. On the add form the type starts as `A`, so the checkbox shows straight away; the checkbox only appears for `A`/`AAAA` (and *Priority* only for `MX`/`SRV`). PTR changes are written to the audit log; the API response lists them under `"ptr"`.
 
 **Manual sync via CLI:**
 
@@ -507,6 +514,8 @@ curl http://<host>:81/api/v1/zones/ \
 | POST | `/api/token/` | Obtain JWT access + refresh tokens |
 | POST | `/api/token/refresh/` | Refresh JWT access token |
 
+**Reverse DNS through the API:** `POST /api/v1/zones/` accepts `"subnet": "192.0.2.0/24"` in place of `name` and fills in `name`, `zone_type` and `ip_version`. `POST`/`PATCH /api/v1/records/` accepts `"sync_ptr": true` on an `A`/`AAAA` record to create or update its PTR record (and the reverse zone if needed); the response then lists what changed under `"ptr"`. See [Reverse zones and PTR records](#dns-zone-sync).
+
 **JWT lifetimes:** access token 15 minutes, refresh token 1 day (rotation enabled).
 
 ---
@@ -514,7 +523,7 @@ curl http://<host>:81/api/v1/zones/ \
 ## Running Tests
 
 ```bash
-# All tests (325 total)
+# All tests (373 total)
 pytest
 
 # One module
