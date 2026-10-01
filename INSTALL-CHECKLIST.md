@@ -153,6 +153,7 @@ dig @NS_IP www.ZONE A +norec
 dig @NS_IP ns1.ZONE A +norec
 ```
 
+☐ Manage → Nameservers shows this server's agent version, "checked in just now"
 ☐ all three `NOERROR` with the `aa` flag → done. Only now add the server
 to public NS records / the registrar.
 
@@ -172,12 +173,12 @@ mysqldump -u root --single-transaction --routines bindmanager | gzip > /root/bac
 git pull
 docker compose up -d --build && docker compose restart nginx
 
-# Each nameserver — only if the diff above listed agents/
-cd /root/bindmanager && git pull
-cmp agents/bindmanager_agent.py /opt/bindmanager-agent/bindmanager_agent.py || \cp -f agents/bindmanager_agent.py /opt/bindmanager-agent/
+# Each nameserver Manage → Nameservers marks Outdated/Unknown (as root)
+cd /root/bindmanager && git pull && ./agents/update-agent.sh
 ```
 
 ☐ login page loads (no 502) ☐ footer shows the new version ☐ an edited zone syncs within ~2 min
+☐ Manage → Nameservers: every agent shows the latest version, no notice
 
 ---
 

@@ -97,6 +97,10 @@ Empty output = nothing to add. Otherwise copy each listed line from
 `.env.example` into `.env` and set a real value. Read the comment above it in
 `.env.example` — a setting may be optional.
 
+Commented-out settings in `.env.example` (e.g. `# TRUSTED_PROXY_COUNT=1`)
+are optional with safe defaults, so the command above doesn't list them.
+Skim the diff of `.env.example` from 0.1 for any you might need.
+
 ### 1.3 Rebuild and restart
 
 ```bash
@@ -280,6 +284,8 @@ Part 1 again.
 | Every page is **502 Bad Gateway** after the rebuild | nginx still points at the old `web` container. `docker compose restart nginx` |
 | `web` keeps restarting; logs show a migration error | Read the error in `docker compose logs web`. Don't loop restarts — roll back (restore the backup, check out the old commit) and report the error |
 | Zones stay unsynced after the update | `docker compose logs worker` for errors; check the "Sync dirty zones" periodic task is still enabled in `/admin/` → **Periodic tasks** |
+| Login page says *Too many failed login attempts* | 10 failed logins from that IP in 5 minutes; it clears 5 minutes after the last one. To clear it now: `docker compose exec web python manage.py shell -c "from django.core.cache import cache; cache.delete('login_fail:<client-ip>')"` (the IP is in the audit log's failed-login entries) |
+| Manage → Nameservers shows an agent as *Stale* | That nameserver's agent stopped checking in: `systemctl status bindmanager-agent.timer` and `journalctl -u bindmanager-agent -n 50` on it |
 | Nameserver agent logs `401` after an update | The app didn't change keys on update — check `api_key` in `config.ini` still matches the nameserver's key in **Manage > Nameservers** |
 
 ---

@@ -146,6 +146,12 @@ Optional security overrides:
 ```ini
 # Session lifetime (seconds). Default is 8 hours.
 SESSION_COOKIE_AGE=28800
+
+# Proxies in front of the app (default 1 = the bundled nginx). Only raise it
+# if you put another proxy or load balancer in front of nginx; it decides
+# which X-Forwarded-For entry is the real client IP (login lockout, API rate
+# limits, audit log).
+TRUSTED_PROXY_COUNT=1
 ```
 
 ### 4. Build and Start
@@ -184,7 +190,19 @@ docker compose exec web python manage.py createsuperuser
 | `http://<host>:81/admin/` | Django admin panel (`is_superuser` only) |
 
 The footer of every page after login shows the running version (e.g.
-`v0.2.0`), read from the `VERSION` file — see [Versioning](#versioning).
+`v0.2.5`), read from the `VERSION` file — see [Versioning](#versioning).
+
+### Roles
+
+| Role | Can |
+|---|---|
+| **User** | Log in and view zones (read-only); read-only API |
+| **Staff** | Everything above, plus the Dashboard and **Manage** (zones, records, nameservers, audit log) and API writes |
+| **Superuser** | Everything above, plus **Users**, the API reference page and `/admin/`. A superuser is always saved as staff too |
+
+The role is shown in the user menu (top right) and in **Manage → Users**.
+`createsuperuser` makes a superuser; users added in Manage → Users get
+whatever boxes you tick; first-time SSO users become Staff (see [SSO](#sso-optional)).
 
 ---
 
@@ -218,35 +236,42 @@ bindmanager/
 │       ├── migrations/
 │       │   ├── 0001_initial.py
 │       │   ├── 0002_alter_auditlog_action_maxlength.py
-│       │   └── 0003_nameserver_api_key.py
+│       │   ├── 0003_nameserver_api_key.py
+│       │   ├── 0004_zone_published_version.py      # last validated zone file served to agents
+│       │   ├── 0005_zone_sync_lock_optional_creator.py  # per-zone sync lock; creator optional
+│       │   └── 0006_nameserver_agent_checkin.py    # agent version + last check-in per nameserver
 │       ├── models.py           # Zone, Record, NameServer, AuditLog
-│       ├── tasks.py            # Celery: sync_dirty_zones dispatcher + per-zone sync_zone task
+│       ├── tasks.py            # Celery: sync_dirty_zones dispatcher (+ central cleanup) + per-zone sync_zone task
 │       ├── templatetags/
 │       │   └── dns_tags.py     # rtype_class filter + url_replace tag
 │       ├── urls.py             # All URL patterns
-│       ├── validators.py       # Record value checks + same-name conflict/duplicate checks (UI, admin, API)
+│       ├── validators.py       # Zone/record name, value, target, priority checks + conflict/duplicate checks (UI, admin, API)
 │       ├── views.py            # Public read-only zone/record views
 │       └── zone_engine/
 │           ├── generator.py    # Builds BIND zone file content via Jinja2
-│           └── writer.py       # Atomic file write, named-checkzone + rndc reload
+│           └── writer.py       # Atomic file write, named-checkzone, rndc reload/addzone/delzone
+├── agents/                     # Runs on each nameserver, not in Docker
+│   ├── bindmanager_agent.py    # Pull agent (stdlib only); AGENT_VERSION, --version
+│   ├── update-agent.sh         # Updates the installed agent (backup, dry-run check, rollback)
+│   ├── config.example.ini
+│   ├── systemd/                # bindmanager-agent.service + .timer (every 2 min)
+│   └── README.md
 ├── config/
 │   ├── __init__.py             # celery_app export + optional PyMySQL shim (no-op — mysqlclient is the driver)
 │   ├── settings/
-│   │   ├── base.py             # Core settings (used by all environments); reads VERSION into APP_VERSION
+│   │   ├── base.py             # Core settings; reads VERSION (APP_VERSION) and the agent's AGENT_VERSION
 │   │   ├── development.py
 │   │   ├── production.py       # HSTS, secure cookies
-│   │   └── test.py             # SQLite :memory: for pytest
+│   │   └── test.py             # SQLite :memory: + local-memory cache for pytest
 │   ├── celery.py
 │   └── urls.py
-├── branding/                   # Volume-mounted branding assets (logo + favicon)
-│   ├── logo.webp               # Replace with your own logo — .svg/.png/.jpg also accepted
-│   └── favicon.ico             # Replace with your own favicon — .png also accepted
+├── branding/                   # Your logo + favicon (not in git — create it; see White-Label Branding)
 ├── frontend/
 │   ├── static/
 │   │   ├── css/theme.css       # All styles — CSS variable tokens for light/dark
 │   │   ├── js/vendor/gsap.min.js  # Vendored GSAP 3.12 (no CDN) — animation engine
-│   │   ├── js/app.js           # Delete modal, toasts, live search, user menu, progress bar; GSAP-driven motion
-│   │   └── js/theme.js         # Theme toggle, persists to localStorage; GSAP icon crossfade
+│   │   ├── js/app.js           # Delete modal, toasts, live search, user menu, progress bar, pinned table actions; GSAP motion (skipped under reduced motion)
+│   │   └── js/theme.js         # Theme toggle (shows the theme it switches to), persists to localStorage
 │   └── templates/
 │       ├── base.html           # App shell: topbar, nav, footer (with version), toasts, delete modal
 │       ├── dashboard.html      # Staff dashboard (standalone, no sidebar)
@@ -269,22 +294,22 @@ bindmanager/
 │           └── zone_detail.html / zone_form.html / zone_list.html
 ├── tests/
 │   ├── conftest.py             # Shared fixtures (staff_user, regular_user, zone, nameserver)
+│   ├── test_agent_api.py       # NameServer API key + pull-agent endpoints (published versions) + agent rate limit (16 tests)
 │   ├── test_agent_version.py   # Agent reports its version; check-in recorded; Outdated/Unknown/Stale/Never shown (14 tests)
 │   ├── test_bug_sweep.py       # Re-sync on zone/NS changes, name/priority/SRV validation, sync lock + audit de-dup, central cleanup, agent partial failure (67 tests)
 │   ├── test_generator.py       # Zone engine: _bump_serial, _quote_txt, build_zone, file layout (33 tests)
-│   ├── test_permissions.py     # IsStaffOrReadOnly (21 tests)
-│   ├── test_template_tags.py   # rtype_class, url_replace (21 tests)
-│   ├── test_user_menu_role.py  # User-menu role badge: Superuser / Staff / User (3 tests)
 │   ├── test_login_lockout.py   # Real client IP despite fake X-Forwarded-For; lockout before password; /api/token/ shares it (15 tests)
 │   ├── test_models.py          # Zone, Record, AuditLog, NameServer (12 tests)
-│   ├── test_agent_api.py       # NameServer API key + pull-agent endpoints (published versions) + agent rate limit (16 tests)
-│   ├── test_update_agent_script.py # agents/update-agent.sh in a sandbox: update, no-op, rollback, downgrade guard (6 tests)
-│   ├── test_validators.py      # Record value, CNAME-conflict and duplicate validation (form + API) + named-checkzone error text (49 tests)
-│   ├── test_zone_publish.py    # Sync publishes validated files; mid-sync edits re-sync; migration backfill (6 tests)
+│   ├── test_permissions.py     # IsStaffOrReadOnly (21 tests)
 │   ├── test_record_targets.py  # CNAME/NS/PTR/MX/SRV targets: missing trailing dot fixed or rejected (25 tests)
 │   ├── test_sso_pipeline.py    # SSO never links to the session user or by email (4 tests)
 │   ├── test_superuser_staff.py # Superuser always saved as staff (4 tests)
-│   └── test_version.py         # VERSION file → APP_VERSION → template context (2 tests)
+│   ├── test_template_tags.py   # rtype_class, url_replace (21 tests)
+│   ├── test_update_agent_script.py # agents/update-agent.sh in a sandbox: update, no-op, rollback, downgrade guard (6 tests)
+│   ├── test_user_menu_role.py  # User-menu role badge: Superuser / Staff / User (3 tests)
+│   ├── test_validators.py      # Record value, CNAME-conflict and duplicate validation (form + API) + named-checkzone error text (49 tests)
+│   ├── test_version.py         # VERSION file → APP_VERSION → template context (2 tests)
+│   └── test_zone_publish.py    # Sync publishes validated files; mid-sync edits re-sync; migration backfill (6 tests)
 ├── pytest.ini
 ├── nginx/nginx.conf
 ├── docker/mysql/init.sql       # One-time MySQL database + user creation
@@ -324,16 +349,26 @@ Zone files are written to `./bind_zones/` on the host, mounted into containers a
 
 > **Required one-time setup:** Celery Beat's schedule is stored in the database (`django-celery-beat`), not hardcoded — nothing seeds it automatically. Before `sync_dirty_zones` will ever run, create a Periodic Task in `/admin/django_celery_beat/periodictask/` pointing at `apps.dns_manager.tasks.sync_dirty_zones` on whatever interval you want (e.g. every minute) — or run the one-liner in [`INSTALL-DEBIAN.md` Part 3](INSTALL-DEBIAN.md#part-3--turn-on-the-sync-engine-do-not-skip-this--verify-it). Without this step the `beat` container runs but never dispatches syncs, and nothing reports an error.
 
-Any record or zone change automatically sets `is_dirty = True`. The Celery Beat scheduler triggers `sync_dirty_zones` on the configured schedule, which dispatches an independent `sync_zone` task for each dirty zone. Each per-zone task:
+Any change that affects a zone file sets `is_dirty = True` (shown as *Pending Sync*): adding, editing, moving or deleting records, editing the zone's SOA settings, assigning or removing nameservers, and renaming or deleting a nameserver. The Celery Beat scheduler triggers `sync_dirty_zones` on the configured schedule, which dispatches an independent `sync_zone` task for each dirty zone. Each per-zone task:
 
-1. Renders the zone file from a Jinja2 template
-2. Validates it with `named-checkzone`
-3. Atomically replaces the old file
-4. Calls `rndc reload <zone>` on the nameserver
-5. Clears the dirty flag and writes an audit log entry
-6. Retries up to 3 times (30-second delay) if anything fails — the worker log and the audit log show `named-checkzone`'s actual reason
+1. Takes the zone's sync lock, so two syncs of one zone never run at once
+2. Renders the zone file from a Jinja2 template
+3. Validates it with `named-checkzone`
+4. Atomically replaces the central file and runs `rndc reload <zone>` on the hidden primary (`rndc addzone` for a brand-new zone)
+5. **Publishes** that exact file and its serial — this is the only version the nameserver agents are ever given
+6. Clears the dirty flag (unless the zone was edited while it ran — then it syncs again next round) and writes an audit log entry
 
-**Record validation on save:** the Manage UI, Django admin and REST API all reject record values that can never be valid, before they reach the sync pipeline — `A`/`AAAA` values must be real IPv4/IPv6 addresses, and `NS`/`CNAME`/`PTR`/`MX` values must be hostnames, not IPs (an IP there is almost always a mistyped `A` record). They also reject a CNAME at a name that has other records (or at the zone apex), any record at a name that is already a CNAME, and exact duplicates of an existing record. Several `A`/`AAAA` records with the same name are fine — that's how a name returns multiple IPs (BIND rotates the order between answers). Inactive records are ignored by these checks, since they aren't written to the zone file. Everything else is still validated by `named-checkzone` at sync time.
+If a sync fails, the zone stays *Pending Sync* and is retried on every scheduled run; the audit log records the failure (with `named-checkzone`'s reason) once, not on every retry. **Meanwhile the nameservers keep serving the last published version** — a pending or broken edit never reaches them and never removes the zone from them. Each run also removes the central files of deleted or renamed zones.
+
+**Validation on save:** the Manage UI, Django admin and REST API all check zones and records before they reach the sync pipeline:
+
+- **Zone names** are lower-cased, lose a trailing dot and must be a valid domain name.
+- **Record names** are stored relative to the zone: `www`, `www.example.com` and `www.example.com.` all become `www` (`@` for the apex). Spaces, invalid characters and names outside the zone are rejected. `*` wildcards and `_` labels (`_dmarc`, `_sip._tcp`) are fine.
+- **Values:** `A`/`AAAA` must be real IPv4/IPv6 addresses; `NS`/`CNAME`/`PTR`/`MX` must be hostnames, not IPs. `SRV` values must be `weight port target`. `MX` and `SRV` need a priority. SOA records can't be added (the zone's settings generate the SOA).
+- **Hostname targets** (CNAME/MX/NS/PTR/SRV): a name without a trailing dot is relative to the zone, so a target ending with the zone's own name gets the missing dot (`www.example.com` → `www.example.com.`); `www` is fine as is; any other dotted name without a dot (`www.other.org`) is rejected with a message, because it would silently become `www.other.org.example.com.`.
+- **Conflicts:** a CNAME at a name that has other records (or at the apex), any record at a name that is already a CNAME, and exact duplicates are rejected. Several `A`/`AAAA` records with the same name are fine — that's how a name returns multiple IPs. Inactive records are ignored by these checks, since they aren't written to the zone file.
+
+Everything else is still validated by `named-checkzone` at sync time.
 
 **Zone contents you don't enter yourself:** each zone's `NS` records come from its assigned nameservers (their `name` field), and the SOA primary is the first assigned nameserver. If that name is inside the zone (e.g. `ns1.example.com` for `example.com`), add an `A` record for it — `named-checkzone` rejects the zone without that glue.
 
@@ -417,7 +452,7 @@ curl http://<host>:81/api/v1/zones/ \
 
 **Permissions:** All endpoints require authentication. Write operations (POST / PUT / PATCH / DELETE) additionally require `is_staff=True`. Read operations are available to any authenticated user. The `/api/v1/agent/` endpoints authenticate with a nameserver's Agent API key instead and return the last validated version of each zone assigned to that nameserver (edits still pending sync are never served). Each agent run also records the agent's version and check-in time, shown in **Manage → Nameservers**.
 
-**Rate limiting:** Anonymous requests 20/min, authenticated requests 300/min, pull-agent requests 300/min per nameserver key — applied to every endpoint.
+**Rate limiting:** Anonymous requests 20/min, authenticated requests 300/min, pull-agent requests 300/min per nameserver key — applied to every endpoint, counted per real client IP (a faked `X-Forwarded-For` doesn't help). `/api/token/` also shares the login page's failed-login lockout (see [Security](#security)).
 
 **Endpoints:**
 
@@ -432,7 +467,7 @@ curl http://<host>:81/api/v1/zones/ \
 | GET / PATCH / DELETE | `/api/v1/nameservers/{id}/` | Retrieve, update, or delete a nameserver |
 | GET | `/api/v1/audit/` | Audit log (read-only) |
 | GET | `/api/v1/agent/zones/` | Pull agent: zones assigned to this nameserver (`Authorization: ApiKey <key>`, not JWT) |
-| GET | `/api/v1/agent/zones/{name}/` | Pull agent: rendered zone file for one assigned zone |
+| GET | `/api/v1/agent/zones/{name}/` | Pull agent: the last validated (published) zone file for one assigned zone |
 | POST | `/api/token/` | Obtain JWT access + refresh tokens |
 | POST | `/api/token/refresh/` | Refresh JWT access token |
 
@@ -480,6 +515,7 @@ Production-only (enabled in `config/settings/production.py`):
 - `SECURE_HSTS_SECONDS = 31536000` with subdomains and preload
 
 Known gaps (require additional tooling or infrastructure decisions):
+- First-time SSO users get Staff automatically — anyone who can sign in through your Okta/Authentik application can manage DNS. Restrict who may use that application in the identity provider
 - No MFA support
 - No audit log archival/retention policy
 - TLS termination is the deployer's responsibility
@@ -500,13 +536,17 @@ BindManager is designed to be sold and deployed under a customer's own brand. Th
 
 ### Option A — File drop (recommended)
 
-The `./branding/` directory already exists and contains the default logo and favicon. Replace them with the customer's files — Nginx serves them directly with no Django involvement and no restart needed.
+Create `./branding/` in the checkout (it isn't in git, so your files are never committed or overwritten by an update) and put the customer's files in it — Nginx serves them directly with no Django involvement and no restart needed.
 
 ```
 branding/
-  logo.webp       ← replace with customer logo (.svg / .png / .webp / .jpg accepted)
-  favicon.ico     ← replace with customer favicon (.ico or .png accepted)
+  logo.webp       ← customer logo (.svg / .png / .webp / .jpg accepted)
+  favicon.ico     ← customer favicon (.ico or .png accepted)
 ```
+
+> **No built-in default logo is shipped.** Until you add one (here or via
+> `BRANDING_LOGO_URL`), the topbar and login page show a broken image and
+> the browser shows no favicon.
 
 The app picks up the new files automatically on the next page load. Delete the old file if switching formats (e.g. replacing `logo.webp` with `logo.png`).
 
@@ -529,7 +569,7 @@ BRANDING_FAVICON_URL=https://cdn.acme.com/favicon.ico
 BRANDING_*_URL env var  →  ./branding/ file  →  built-in default
 ```
 
-Env-var URLs take priority over volume files. The `branding/` folder ships with default files — replace them with the customer's assets and the defaults never show. Customers who prefer CDN delivery can set the env-var URLs and ignore the folder entirely.
+Env-var URLs take priority over volume files. Customers who prefer CDN delivery can set the env-var URLs and skip the folder entirely.
 
 ---
 
@@ -587,8 +627,12 @@ docker compose restart nginx     # otherwise nginx may serve 502s after the rebu
 ```
 
 Database migrations and `collectstatic` run automatically when `web`
-starts. Nameservers only need updating when a release changes `agents/`.
-Afterwards, the page footer should show the new version.
+starts. Afterwards, the page footer should show the new version.
+
+Nameservers only need updating when a release changes the agent:
+**Manage → Nameservers** marks any agent older than the one the app ships
+as *Outdated* (or *Unknown*). On each of those, as root:
+`cd /root/bindmanager && git pull && ./agents/update-agent.sh`.
 
 ### Versioning
 
@@ -604,8 +648,11 @@ release is also a git tag (`v0.2.0`, …).
   needs manual steps), commit, then `git tag -a vX.Y.Z -m "vX.Y.Z"` and
   `git push && git push --tags`. Details in
   [`UPDATING.md`](UPDATING.md#releasing-a-new-version-maintainers).
-- The version covers the app only. The nameserver agent has no version of
-  its own; UPDATING.md checks whether it changed with `cmp`.
+- **The agent** has its own `AGENT_VERSION` (in `agents/bindmanager_agent.py`),
+  set to the release number whenever the agent changes. Each agent reports
+  it on every run; Manage → Nameservers shows it with the last check-in and
+  flags *Outdated*, *Unknown* (agents before 0.2.4), *Never* and *Stale*
+  (no check-in for 10 minutes) — the dashboard shows a notice too.
 
 ---
 

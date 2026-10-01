@@ -290,7 +290,7 @@ systemctl list-timers bindmanager-agent.timer
 ```
 
 Within 2 minutes, **Manage → Nameservers** in the app shows this server's
-agent version and a recent *Last check-in*.
+agent version (e.g. `0.2.4`) and "checked in just now" in the *Agent* column.
 
 ---
 
