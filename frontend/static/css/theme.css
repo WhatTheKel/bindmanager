@@ -720,7 +720,7 @@ th {
 .key-cell { display: inline-block; max-width: 8ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
 
 /* Copy-to-clipboard button (e.g. nameserver API keys) */
-.copy-btn {
+.copy-inline {
   position: relative;
   display: inline-flex; align-items: center; justify-content: center;
   width: 28px; height: 28px; padding: 0; margin-left: .2rem;
@@ -730,13 +730,13 @@ th {
   font: inherit; font-size: .7rem; cursor: pointer;
   transition: color .15s, border-color .15s, background .15s;
 }
-.copy-btn:hover { color: var(--primary); border-color: var(--primary); }
-.copy-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-.copy-btn .icon-done { display: none; }
-.copy-btn.copied { color: var(--success); border-color: var(--success); }
-.copy-btn.copied .icon-copy { display: none; }
-.copy-btn.copied .icon-done { display: inline; }
-.copy-btn.copy-failed { color: var(--warning); border-color: var(--warning); }
+.copy-inline:hover { color: var(--primary); border-color: var(--primary); }
+.copy-inline:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.copy-inline .icon-done { display: none; }
+.copy-inline.copied { color: var(--success); border-color: var(--success); }
+.copy-inline.copied .icon-copy { display: none; }
+.copy-inline.copied .icon-done { display: inline; }
+.copy-inline.copy-failed { color: var(--warning); border-color: var(--warning); }
 /* "Copied" / "Press Ctrl+C" bubble above the button — no layout shift */
 .copy-label {
   position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%);

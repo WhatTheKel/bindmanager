@@ -40,8 +40,11 @@
     var modalCancel = $('#delete-modal-cancel');
     var modalOpen   = false;
 
-    function openDelete(url, label) {
+    var modalSubmit = $('#delete-modal-submit');
+
+    function openDelete(url, label, buttonText) {
       modalMsg.textContent = label;
+      if (modalSubmit) modalSubmit.textContent = buttonText || 'Delete';
       modalForm.action = url;
       modal.style.display = 'flex';
       modalOpen = true;
@@ -89,7 +92,8 @@
     $$('[data-delete-url]').forEach(function (el) {
       el.addEventListener('click', function (e) {
         e.preventDefault();
-        openDelete(el.dataset.deleteUrl, el.dataset.deleteLabel || 'Delete this item? This cannot be undone.');
+        openDelete(el.dataset.deleteUrl, el.dataset.deleteLabel || 'Delete this item? This cannot be undone.',
+                   el.dataset.deleteButton);
       });
     });
 
@@ -171,7 +175,7 @@
           // Couldn't reach the clipboard: select the key so Ctrl+C works
           btn.classList.add('copy-failed');
           if (label) label.textContent = 'Press Ctrl+C';
-          var key = btn.parentNode.querySelector('.key-cell');
+          var key = btn.parentNode.querySelector('.copy-source, .key-cell');
           if (key) {
             var range = document.createRange();
             range.selectNodeContents(key);

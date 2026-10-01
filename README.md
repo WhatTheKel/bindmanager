@@ -218,7 +218,9 @@ bindmanager/
 │   │   ├── signals.py          # Writes AuditLog on login / logout / failed login; superuser ⇒ staff
 │   │   ├── client_ip.py        # Real client IP from X-Forwarded-For (TRUSTED_PROXY_COUNT from the right)
 │   │   ├── lockout.py          # Per-IP failed-login lockout (Redis), shared by login page and /api/token/
-│   │   └── views.py            # SmartLoginView + LockoutTokenObtainPairView; redirects staff to /dashboard/
+│   │   ├── models.py           # ApiToken — personal API tokens (hash only)
+│   │   ├── token_auth.py       # DRF auth for "Authorization: Token bmt_…"
+│   │   └── views.py            # SmartLoginView, LockoutTokenObtainPairView, API tokens page
 │   ├── api/
 │   │   ├── urls.py             # Mounts v1 at /api/v1/, JWT endpoints at /api/token/
 │   │   └── v1/
@@ -296,6 +298,7 @@ bindmanager/
 │   ├── conftest.py             # Shared fixtures (staff_user, regular_user, zone, nameserver)
 │   ├── test_agent_api.py       # NameServer API key + pull-agent endpoints (published versions) + agent rate limit (16 tests)
 │   ├── test_agent_version.py   # Agent reports its version; check-in recorded; Outdated/Unknown/Stale/Never shown; API-key copy button (15 tests)
+│   ├── test_api_tokens.py      # Personal API tokens: SSO use, roles, hash-only, expiry, revoke, show-once (26 tests)
 │   ├── test_bug_sweep.py       # Re-sync on zone/NS changes, name/priority/SRV validation, sync lock + audit de-dup, central cleanup, agent partial failure (67 tests)
 │   ├── test_generator.py       # Zone engine: _bump_serial, _quote_txt, build_zone, file layout (33 tests)
 │   ├── test_login_lockout.py   # Real client IP despite fake X-Forwarded-For; lockout before password; /api/token/ shares it (15 tests)
@@ -437,7 +440,29 @@ is issued.
 
 Full interactive documentation is available at `/api/v1/` in the app.
 
-Authentication uses JWT. Obtain a token first, then pass it as a Bearer header:
+Every endpoint needs authentication — there are three ways:
+
+| Method | Header | For |
+|---|---|---|
+| **Personal API token** | `Authorization: Token bmt_…` | Scripts and tools; **the only option for SSO (Authentik/Okta) users** |
+| JWT | `Authorization: Bearer <access>` | Local accounts with a password (`/api/token/`) |
+| Session | (login cookie) | The browser, while logged in |
+
+**Personal API tokens:** user menu (top right) → **API tokens** → name it,
+pick an expiry (up to `API_TOKEN_MAX_DAYS`, default 90 days) → copy the
+token, which is shown only once. It acts as that user with their role,
+shows when and from where it was last used, and can be revoked there.
+Deactivating a user stops all their tokens; a superuser can revoke all of
+a user's tokens from **Manage → Users → Edit**. Only a hash is stored.
+BindManager isn't told when someone is disabled in Authentik/Okta, so their
+tokens keep working until they expire or are revoked — revoke them when
+offboarding.
+
+```bash
+curl http://<host>:81/api/v1/zones/ -H "Authorization: Token bmt_…"
+```
+
+**JWT** (local accounts only): obtain a token first, then pass it as a Bearer header:
 
 ```bash
 # Get token
@@ -471,14 +496,14 @@ curl http://<host>:81/api/v1/zones/ \
 | POST | `/api/token/` | Obtain JWT access + refresh tokens |
 | POST | `/api/token/refresh/` | Refresh JWT access token |
 
-**Token lifetimes:** access token 15 minutes, refresh token 1 day (rotation enabled).
+**JWT lifetimes:** access token 15 minutes, refresh token 1 day (rotation enabled).
 
 ---
 
 ## Running Tests
 
 ```bash
-# All tests (299 total)
+# All tests (325 total)
 pytest
 
 # One module

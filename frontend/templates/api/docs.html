@@ -250,7 +250,8 @@
           <table class="param-table">
             <thead><tr><th>Header</th><th>Value</th><th>Notes</th></tr></thead>
             <tbody>
-              <tr><td class="param-name">Authorization</td><td><code>Bearer &lt;access_token&gt;</code></td><td>JWT authentication</td></tr>
+              <tr><td class="param-name">Authorization</td><td><code>Token bmt_&hellip;</code></td><td>Personal API token — create one under your user menu → <a href="{% url 'api_tokens' %}">API tokens</a>. Works for SSO (Authentik/Okta) accounts</td></tr>
+              <tr><td class="param-name">Authorization</td><td><code>Bearer &lt;access_token&gt;</code></td><td>JWT from <code>/api/token/</code> — local accounts with a password only</td></tr>
               <tr><td class="param-name">Content-Type</td><td><code>application/json</code></td><td>Required for POST / PUT / PATCH</td></tr>
               <tr><td class="param-name">Accept</td><td><code>application/json</code></td><td>Ensures JSON responses</td></tr>
             </tbody>
@@ -280,6 +281,27 @@
         Authentication
       </div>
 
+      <!-- Personal API tokens -->
+      <div class="ep-card" id="auth-personal-token">
+        <div class="ep-header">
+          <div class="ep-title">
+            <span class="method get">ANY</span>
+            <code class="ep-path">Authorization: Token bmt_&hellip;</code>
+          </div>
+          <p class="ep-desc">Personal API tokens — the way to use the API with an Authentik or Okta account (no password needed), and the simplest option for scripts.
+            Create one under your user menu → <a href="{% url 'api_tokens' %}">API tokens</a>: it is shown once, acts as you with your role, expires after the period you choose, and can be revoked there at any time.</p>
+        </div>
+        <div class="ep-body">
+          <div class="ep-label">Example</div>
+          <div class="code-wrap">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre class="code-block">curl {{ base_url }}v1/zones/ \
+  -H "Authorization: Token bmt_&hellip;"</pre>
+          </div>
+          <p class="ep-desc" style="margin-top:.6rem">Errors: <code>401</code> for an unknown, revoked or expired token, or a deactivated account.</p>
+        </div>
+      </div>
+
       <!-- Obtain token -->
       <div class="ep-card" id="auth-token">
         <div class="ep-header">
@@ -287,7 +309,7 @@
             <span class="method post">POST</span>
             <code class="ep-path">/api/token/</code>
           </div>
-          <p class="ep-desc">Obtain a JWT access token and refresh token using username and password.</p>
+          <p class="ep-desc">Obtain a JWT access token (15 min) and refresh token (1 day) using username and password. Local accounts only — SSO accounts have no password here; use a personal API token instead. Shares the login page's lockout: 10 failures per IP in 5 minutes → <code>429</code>.</p>
         </div>
         <div class="ep-body">
           <div class="ep-label">Request Body</div>

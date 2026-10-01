@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}API tokens — {{ BRANDING_APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">API tokens</div>
+    <div class="page-subtitle">
+      Personal tokens for scripts and tools — they work with Authentik/Okta accounts too.
+      A token acts as you, with your role:
+      {% if user.is_staff %}read and write{% else %}read only{% endif %}.
+    </div>
+  </div>
+</div>
+
+{% if new_token %}
+<div class="card" style="margin-bottom:1.25rem;border-color:var(--success)">
+  <div class="card-body">
+    <div style="font-weight:600;margin-bottom:.35rem">Token "{{ new_token.name }}" created</div>
+    <p class="text-sm" style="margin-bottom:.75rem">
+      Copy it now and store it somewhere safe. <strong>It won't be shown again</strong> —
+      if you lose it, revoke it and create a new one.
+    </p>
+    <div style="display:flex;align-items:center;gap:.35rem;flex-wrap:wrap">
+      <code class="copy-source monospace" style="word-break:break-all;padding:.4rem .6rem;border:1px solid var(--border);border-radius:6px;background:var(--surface-2)">{{ new_token.key }}</code>
+      <button type="button" class="copy-inline" data-copy="{{ new_token.key }}"
+              title="Copy the token" aria-label="Copy the new API token">
+        <svg class="icon-copy" aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        <svg class="icon-done" aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        <span class="copy-label" aria-live="polite"></span>
+      </button>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="grid-2col align-start">
+  <div class="card">
+    <div class="card-header">Create a token</div>
+    <div class="card-body">
+      <form method="post">
+        {% csrf_token %}
+        <div class="form-group">
+          <label class="form-label" for="token-name">Name</label>
+          <input class="form-input" id="token-name" name="name" maxlength="100" required
+                 placeholder="e.g. ansible on build server">
+          <div class="form-hint">Where it will be used, so you know which one to revoke later.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="token-days">Expires after</label>
+          <select class="form-input form-select" id="token-days" name="days">
+            {% for days, label in expiry_choices %}
+            <option value="{{ days }}"{% if days == default_days %} selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Create token</button>
+        <span class="text-xs text-muted" style="margin-left:.5rem">Up to {{ max_tokens }} tokens.</span>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">How to use it</div>
+    <div class="card-body text-sm">
+      <p style="margin-bottom:.5rem">Send it in the <code>Authorization</code> header:</p>
+<pre class="monospace" style="white-space:pre-wrap;word-break:break-all;padding:.6rem;border:1px solid var(--border);border-radius:6px;background:var(--surface-2);font-size:.78rem">curl {{ api_base }}zones/ \
+  -H "Authorization: Token bmt_…"</pre>
+      <p class="text-muted" style="margin-top:.5rem">
+        Revoke a token as soon as it's no longer needed or may have leaked.
+        Deactivating your account stops all your tokens.
+      </p>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:1.25rem">
+  <div class="card-header">Your tokens</div>
+  {% if tokens %}
+  <div class="table-wrap">
+    <table class="table-actions">
+      <thead>
+        <tr><th>Name</th><th>Token</th><th>Created</th><th>Expires</th><th>Last used</th>
+            <th style="text-align:right">Actions</th></tr>
+      </thead>
+      <tbody>
+        {% for t in tokens %}
+        <tr>
+          <td style="font-weight:600">{{ t.name }}</td>
+          <td class="monospace text-sm text-muted">{{ t.key_prefix }}…</td>
+          <td class="text-sm" title="{{ t.created_at|date:'Y-m-d H:i' }}">{{ t.created_at|date:'Y-m-d' }}</td>
+          <td class="text-sm">
+            {% if t.is_expired %}<span class="badge badge-red">Expired</span>
+            {% elif t.expires_at %}<span title="{{ t.expires_at|date:'Y-m-d H:i' }}">{{ t.expires_at|date:'Y-m-d' }}</span>
+            {% else %}<span class="badge badge-amber">Never</span>{% endif %}
+          </td>
+          <td class="text-sm">
+            {% if t.last_used_at %}<span title="from {{ t.last_used_ip }}">{{ t.last_used_at|timesince }} ago</span>
+            {% else %}<span class="text-muted">never</span>{% endif %}
+          </td>
+          <td style="text-align:right">
+            <a href="{% url 'revoke_api_token' t.pk %}" class="btn btn-ghost btn-xs text-danger"
+               data-delete-url="{% url 'revoke_api_token' t.pk %}" data-delete-button="Revoke"
+               data-delete-label="Revoke the token &quot;{{ t.name }}&quot;? Anything using it stops working immediately.">Revoke</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty"><p>You have no API tokens.</p></div>
+  {% endif %}
+</div>
+{% endblock %}

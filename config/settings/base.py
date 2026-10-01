@@ -173,6 +173,8 @@ CELERY_TASK_IGNORE_RESULT = True
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
+        # Personal API tokens (Authorization: Token bmt_…), also for SSO users
+        'apps.accounts.token_auth.ApiTokenAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
@@ -241,6 +243,12 @@ try:
     LATEST_AGENT_VERSION = _m.group(1) if _m else ''
 except OSError:
     LATEST_AGENT_VERSION = ''
+# Personal API tokens: longest lifetime a user may choose (days). 0 also
+# offers "no expiry" — not recommended, since BindManager isn't told when
+# someone is disabled in Authentik/Okta.
+API_TOKEN_MAX_DAYS = config('API_TOKEN_MAX_DAYS', default=90, cast=int)
+API_TOKENS_PER_USER = 10
+
 # An agent that hasn't checked in for this long is flagged (timer runs every 2 min)
 AGENT_STALE_AFTER_MINUTES = 10
 

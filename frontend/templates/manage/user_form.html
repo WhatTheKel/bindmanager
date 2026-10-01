@@ -106,4 +106,38 @@
     <a href="{% url 'dns_manager:manage_user_list' %}" class="btn btn-ghost">Cancel</a>
   </div>
 </form>
+
+{% if user_obj %}
+{% with tokens=user_obj.api_tokens.all %}
+<div class="card" style="margin-top:1.25rem">
+  <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;gap:.5rem">
+    <span>API tokens ({{ tokens|length }})</span>
+    {% if tokens %}
+    <a href="{% url 'revoke_user_tokens' user_obj.pk %}" class="btn btn-ghost btn-xs text-danger"
+       data-delete-url="{% url 'revoke_user_tokens' user_obj.pk %}" data-delete-button="Revoke all"
+       data-delete-label="Revoke all {{ tokens|length }} API token(s) of &quot;{{ user_obj.username }}&quot;? Scripts using them stop working immediately.">Revoke all</a>
+    {% endif %}
+  </div>
+  {% if tokens %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Name</th><th>Token</th><th>Expires</th><th>Last used</th></tr></thead>
+      <tbody>
+        {% for t in tokens %}
+        <tr>
+          <td>{{ t.name }}</td>
+          <td class="monospace text-sm text-muted">{{ t.key_prefix }}…</td>
+          <td class="text-sm">{% if t.is_expired %}<span class="badge badge-red">Expired</span>{% elif t.expires_at %}{{ t.expires_at|date:'Y-m-d' }}{% else %}<span class="badge badge-amber">Never</span>{% endif %}</td>
+          <td class="text-sm">{% if t.last_used_at %}{{ t.last_used_at|timesince }} ago from {{ t.last_used_ip }}{% else %}<span class="text-muted">never</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card-body text-sm text-muted">No API tokens. Users create their own from the user menu → API tokens.</div>
+  {% endif %}
+</div>
+{% endwith %}
+{% endif %}
 {% endblock %}
