@@ -413,13 +413,14 @@ it. Only when it needs updating:
 
 ```bash
 cd /root/bindmanager && git pull
-cmp agents/bindmanager_agent.py /opt/bindmanager-agent/bindmanager_agent.py \
-  || \cp -f agents/bindmanager_agent.py /opt/bindmanager-agent/
+./agents/update-agent.sh
 ```
 
-No restart needed — the timer's next run uses the new file. If the systemd
-unit files changed too, re-copy them and **re-run the `python3.9` sed from
-4.2**. Full details: [`UPDATING.md`](UPDATING.md) Part 2.
+The script backs up the old agent, installs the new one, checks it against
+the app (restoring the old one if that fails) and runs it once, so the app
+shows the new version straight away. If it says the systemd unit files
+changed, re-copy them and **re-run the `python3.9` sed from 4.2**. Full
+details, including updating without git: [`UPDATING.md`](UPDATING.md) Part 2.
 
 ---
 

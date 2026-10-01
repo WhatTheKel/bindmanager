@@ -147,18 +147,46 @@ Pick the section that matches how that nameserver was installed.
 
 ### 2.1 Agent installed on the host (systemd timer — the install guides' default)
 
+Run the update script as root:
+
 ```bash
 cd /root/bindmanager
-git pull
+git pull                          # fetches the latest update-agent.sh too
+./agents/update-agent.sh          # add --check to only see whether an update is due
+```
+
+It finds the installed agent, its Python (e.g. `python3.9` on RHEL 8) and
+`config.ini` from the systemd unit, checks the new agent runs, backs up the
+old one, installs the new one, dry-runs it against the app — **putting the
+old one back if that fails** — and runs it once so **Manage → Nameservers**
+shows the new version straight away. It never changes `config.ini` or the
+systemd units (it tells you if the units changed; see below).
+
+**No clone on the nameserver?** Download the script and let it download the agent:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/WhatTheKel/bindmanager/main/agents/update-agent.sh
+bash update-agent.sh              # --ref v0.2.4 installs a specific release
+```
+
+No internet on the nameserver? Copy `bindmanager_agent.py` over (e.g. `scp`
+from the app host) and run `bash update-agent.sh --source ./bindmanager_agent.py`.
+
+<details><summary>Doing it by hand instead</summary>
+
+```bash
+cd /root/bindmanager && git pull
 cmp agents/bindmanager_agent.py /opt/bindmanager-agent/bindmanager_agent.py \
   && echo "agent already current" \
   || \cp -f agents/bindmanager_agent.py /opt/bindmanager-agent/
 ```
 
 No restart needed: the timer starts the script fresh every run, so the next
-run (within 2 minutes) uses the new version. Your `config.ini` is untouched.
+run (within 2 minutes) uses the new version.
 
-Check the next run:
+</details>
+
+Check it by hand if you like:
 
 ```bash
 python3.9 /opt/bindmanager-agent/bindmanager_agent.py --version  # Debian: python3
@@ -179,15 +207,6 @@ systemctl daemon-reload
 **If `agents/config.example.ini` changed,** compare it with your
 `/etc/bindmanager-agent/config.ini` and add any new settings by hand. Never
 copy the example over your config — it would wipe your API key and paths.
-
-**No git on the nameserver?** Re-download the file instead of `git pull`:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/WhatTheKel/bindmanager/main/agents/bindmanager_agent.py \
-  -o /opt/bindmanager-agent/bindmanager_agent.py
-```
-
-(Or `scp` it from the app host's checkout.)
 
 ### 2.2 Agent in Docker, BIND on the host (`docker-compose.agent.yml`)
 
@@ -213,8 +232,8 @@ seconds. With more than one nameserver, update them one at a time.
 If the app and BIND are on the same machine
 ([`INSTALL-RHEL8.md`](INSTALL-RHEL8.md) or
 [`INSTALL-DEBIAN.md`](INSTALL-DEBIAN.md)), the agent was installed from the
-same checkout. Part 1's `git pull` already fetched the new agent; just run the
-`cmp … || \cp -f …` line from 2.1 in `/opt/bindmanager` (no second pull).
+same checkout. Part 1's `git pull` already fetched the new agent; just run
+`./agents/update-agent.sh` in `/opt/bindmanager` (it pulls again, harmlessly).
 
 ---
 
@@ -303,6 +322,5 @@ git pull
 docker compose up -d --build && docker compose restart nginx
 
 # Each nameserver — only if Manage → Nameservers shows its agent as Outdated/Unknown
-cd /root/bindmanager && git pull
-cmp agents/bindmanager_agent.py /opt/bindmanager-agent/bindmanager_agent.py || \cp -f agents/bindmanager_agent.py /opt/bindmanager-agent/
+cd /root/bindmanager && git pull && ./agents/update-agent.sh
 ```
