@@ -33,6 +33,7 @@ dest=""           # installed agent path   (default: from the systemd unit)
 config=""         # agent config.ini       (default: from the systemd unit)
 python=""         # interpreter            (default: from the systemd unit)
 check_only=0
+allow_downgrade=0
 verify=1
 run_now=1
 
@@ -46,6 +47,7 @@ Options:
   --dest PATH        installed agent   (default: taken from the systemd unit)
   --config PATH      agent config.ini  (default: taken from the systemd unit)
   --python PATH      Python to use     (default: taken from the systemd unit)
+  --allow-downgrade  install even if the fetched agent is older than this one
   --no-verify        skip the dry-run check after installing
   --no-run           don't run the agent once after updating
   -h, --help         show this help
@@ -63,6 +65,7 @@ while [ $# -gt 0 ]; do
         --dest)      dest="${2:?--dest needs a value}"; shift ;;
         --config)    config="${2:?--config needs a value}"; shift ;;
         --python)    python="${2:?--python needs a value}"; shift ;;
+        --allow-downgrade) allow_downgrade=1 ;;
         --no-verify) verify=0 ;;
         --no-run)    run_now=0 ;;
         -h|--help)   usage; exit 0 ;;
@@ -127,12 +130,13 @@ if [ -n "$source_file" ]; then
     info "Using $source_file"
     cat "$source_file" >"$new"
 elif [ -z "$ref" ] && [ -d "$repo_dir/.git" ] && command -v git >/dev/null 2>&1; then
-    info "Updating the git checkout in $repo_dir"
     if [ "$check_only" -eq 1 ]; then
+        info "Checking the latest agent in $repo_dir's upstream branch"
         git -C "$repo_dir" fetch --quiet
         git -C "$repo_dir" show "@{upstream}:agents/bindmanager_agent.py" >"$new" \
             || die "could not read the agent from the upstream branch"
     else
+        info "Updating the git checkout in $repo_dir"
         git -C "$repo_dir" pull --ff-only --quiet \
             || die "git pull failed (local changes in $repo_dir?). Fix that, or use --ref main to download instead."
         cat "$repo_dir/agents/bindmanager_agent.py" >"$new"
@@ -151,17 +155,27 @@ fi
 
 # ── 3. Is it a working agent for this server's Python? ───────────────────────
 grep -q '^def sync(' "$new" || die "the fetched file doesn't look like bindmanager_agent.py"
-"$python" "$new" --version >/dev/null 2>&1 \
-    || die "the new agent doesn't run with $python: $("$python" "$new" --version 2>&1 | tail -1)"
+# (--help, not --version: agents before 0.2.4 don't have --version)
+"$python" "$new" --help >/dev/null 2>&1 \
+    || die "the new agent doesn't run with $python: $("$python" "$new" --help 2>&1 | tail -1)"
 
-old_v=$(agent_version "$dest"); old_v="${old_v:-unknown (before 0.2.4)}"
-new_v=$(agent_version "$new");  new_v="${new_v:-unknown}"
+old_raw=$(agent_version "$dest"); new_raw=$(agent_version "$new")
+old_v="${old_raw:-unknown (before 0.2.4)}"
+new_v="${new_raw:-unknown (before 0.2.4)}"
 
 echo "Installed: $old_v   ($dest)"
 echo "Available: $new_v"
 
 if cmp -s "$new" "$dest"; then
     echo "The agent is already up to date."
+    exit 0
+fi
+# Refuse to replace a versioned agent with an older (or unversioned) one,
+# e.g. when GitHub's main is behind what this server already runs.
+if [ -n "$old_raw" ] && [ "$allow_downgrade" -eq 0 ] && { [ -z "$new_raw" ] ||
+   [ "$(printf '%s\n%s\n' "$old_raw" "$new_raw" | sort -V | head -1)" = "$new_raw" ]; }; then
+    echo "The fetched agent ($new_v) is not newer than the installed one ($old_v); nothing to do."
+    echo "(Use --allow-downgrade to install it anyway.)"
     exit 0
 fi
 if [ "$check_only" -eq 1 ]; then
