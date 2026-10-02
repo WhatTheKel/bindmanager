@@ -46,7 +46,7 @@ instead — this guide's Parts 0 and 4–5 are that guide pointed at `localhost`
 | BIND config | `/etc/bind/named.conf.options` | `/etc/named.conf` |
 | Zones written by the agent | `/etc/bind/zones` | `/var/named/bindmanager` |
 | Agent include file | `/etc/bind/named.bindmanager.conf` | `/etc/named/bindmanager.conf` |
-| MariaDB | distro package | AppStream **module stream ≥ 10.5** — the default 10.3 is too old for Django 4.2 |
+| MariaDB | distro package | AppStream **module stream ≥ 10.5** — the default 10.3 is too old for Django 5.2 |
 | Redis | distro package (7.x) | AppStream module stream `redis:6` (see note in 1.2) |
 | Docker | distro/Docker repo | Docker CE repo; remove Podman first |
 | Python for the agent | system `python3` | `python3.9` — RHEL 8's default 3.6 is too old |
@@ -318,7 +318,7 @@ App-side problems specific to a RHEL host:
 | Symptom | Cause | Fix |
 |---|---|---|
 | `dnf install docker-ce` fails with conflicts on `runc`/`containers-common` | Podman packages still installed | `dnf remove -y podman buildah runc`, then retry |
-| `web` crash-loops; logs mention MariaDB version or unsupported features | MariaDB 10.3 (RHEL 8 default stream) — Django 4.2 needs 10.4+ | Back up, `dnf module reset mariadb`, enable a newer stream, `dnf distro-sync mariadb-server` |
+| `web` crash-loops; logs mention MariaDB version or unsupported features | MariaDB 10.3 (RHEL 8 default stream) — Django 5.2 needs 10.5+ | Back up, `dnf module reset mariadb`, enable a newer stream, `dnf distro-sync mariadb-server` |
 | `web`/`worker` can't reach MariaDB or Redis (`Connection refused` / timed out to `host.docker.internal`) | Redis still bound to `127.0.0.1`, or the service isn't running | `ss -ltn \| grep -E '3306\|6379'` should show `0.0.0.0`; `firewall-cmd --get-active-zones` should list the Docker bridges in zone `docker` |
 | Containers log `Permission denied` on `./bind_zones`, `./staticfiles` or `./branding` | Docker's SELinux support was turned on (`"selinux-enabled": true` in `/etc/docker/daemon.json`) so bind mounts need labels | `chcon -Rt container_file_t bind_zones staticfiles branding`, or turn that option back off |
 | Zone stays `is_dirty=True` | No sync schedule (Part 3), or a record fails `named-checkzone` | `docker compose logs worker \| grep -A3 checkzone` shows the reason |

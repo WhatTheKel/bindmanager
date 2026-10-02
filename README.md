@@ -36,7 +36,7 @@ new versions later, follow `UPDATING.md`.
 
 | Layer | Technology |
 |---|---|
-| Backend | Django 4.2 LTS + Django REST Framework |
+| Backend | Django 5.2 LTS + Django REST Framework |
 | Auth | Django session auth + SSO (Okta / Authentik); API: personal API tokens, JWT (SimpleJWT) or session |
 | Database | MySQL 8.0 / MariaDB 10.11 **or** PostgreSQL 16 (selectable via `DB_ENGINE` in `.env`) |
 | DB driver | `mysqlclient` (MySQL/MariaDB) or `psycopg2-binary` (PostgreSQL) |
