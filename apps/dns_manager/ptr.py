@@ -186,9 +186,9 @@ def sync_ptr(record, user=None, old=None) -> List[PtrChange]:
         return changes
     ptr.save()
     if previous:
-        changes.append(PtrChange('update', f'Updated PTR {label}: {before} → {fqdn}.', ptr.pk))
+        changes.append(PtrChange('update', f'Updated PTR {label}: {before} → {fqdn}', ptr.pk))
     else:
-        changes.append(PtrChange('create', f'Added PTR {label} → {fqdn}.', ptr.pk))
+        changes.append(PtrChange('create', f'Added PTR {label} → {fqdn}', ptr.pk))
     return changes
 
 

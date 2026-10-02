@@ -211,6 +211,7 @@ class TestManageViews:
         assert _ptrs(rev4) == [('25', 'www.example.com.')]
         log = AuditLog.objects.get(detail__startswith='Added PTR')
         assert log.entity_id == rev4.records.get(record_type='PTR').pk
+        assert '→ www.example.com. (from' in log.detail   # not "…com.." (fqdn + full stop)
 
     def test_add_record_creates_reverse_zone(self, client, staff_user, zone):
         client.force_login(staff_user)
