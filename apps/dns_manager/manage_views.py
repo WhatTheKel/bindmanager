@@ -8,10 +8,11 @@ from django.db import transaction
 from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.urls import reverse
+from django.views.decorators.http import require_POST
 
 from .models import Zone, Record, NameServer, AuditLog
 from .forms import ZoneForm, RecordForm, NameServerForm, UserCreateForm, UserEditForm
-from .ptr import snapshot, sync_ptr
+from .ptr import remove_ptr, rename_ptrs, snapshot, sync_ptr
 
 
 def staff_required(view_func):
@@ -131,11 +132,15 @@ def zone_detail(request, pk):
 @staff_required
 def zone_edit(request, pk):
     zone = get_object_or_404(Zone, pk=pk)
+    old_name = zone.name   # read now: validating the form renames the instance
     form = ZoneForm(request.POST or None, instance=zone)
     if form.is_valid():
-        form.save()
-        _audit(request, AuditLog.Action.UPDATE, 'zone', zone.pk, f'Updated zone {zone.name}')
-        messages.success(request, f'Zone "{zone.name}" updated.')
+        with transaction.atomic():
+            form.save()
+            _audit(request, AuditLog.Action.UPDATE, 'zone', zone.pk, f'Updated zone {zone.name}')
+            messages.success(request, f'Zone "{zone.name}" updated.')
+            _report_ptr(request, rename_ptrs(old_name, zone.name),
+                        f'zone {old_name} renamed to {zone.name}')
         return redirect('dns_manager:manage_zone_detail', pk=zone.pk)
     return render(request, 'manage/zone_form.html', {
         'form': form, 'zone': zone, 'title': f'Edit — {zone.name}',
@@ -169,10 +174,16 @@ _PTR_AUDIT = {
 
 def _sync_ptr(request, record, old=None):
     """Run sync_ptr() for a saved A/AAAA record; audit and report each change."""
-    for change in sync_ptr(record, user=request.user, old=old):
+    _report_ptr(request, sync_ptr(record, user=request.user, old=old),
+                f'{record.record_type} "{record.name}" in {record.zone.name}')
+
+
+def _report_ptr(request, changes, source):
+    """Audit and show PTR changes made on behalf of `source`."""
+    for change in changes:
         if change.action in _PTR_AUDIT:
             _audit(request, _PTR_AUDIT[change.action], change.entity_type, change.entity_id,
-                   f'{change.message} (from {record.record_type} "{record.name}" in {record.zone.name})')
+                   f'{change.message} (from {source})')
             messages.success(request, change.message)
         elif change.action == 'warning':
             messages.warning(request, change.message)
@@ -230,10 +241,13 @@ def record_delete(request, zone_pk, pk):
     record = get_object_or_404(Record, pk=pk, zone=zone)
     if request.method == 'POST':
         label = f'{record.record_type} "{record.name}"'
-        record.delete()
-        _audit(request, AuditLog.Action.DELETE, 'record', pk,
-               f'Deleted {label} from {zone.name}')
-        messages.success(request, 'Record deleted.')
+        before = snapshot(record)
+        with transaction.atomic():
+            record.delete()
+            _audit(request, AuditLog.Action.DELETE, 'record', pk,
+                   f'Deleted {label} from {zone.name}')
+            messages.success(request, 'Record deleted.')
+            _report_ptr(request, remove_ptr(before, pk), f'{label} deleted from {zone.name}')
         return redirect('dns_manager:manage_zone_detail', pk=zone.pk)
     return render(request, 'manage/confirm_delete.html', {
         'object_type': 'Record',
@@ -248,12 +262,23 @@ def record_delete(request, zone_pk, pk):
 def nameserver_list(request):
     nameservers = list(NameServer.objects.prefetch_related('zones').order_by('name'))
     needs_attention = _agents_needing_attention(nameservers)
+    # A new or regenerated key is shown in full once, on the next page view;
+    # otherwise only its last characters are in the page.
+    new_key = request.session.pop(_NEW_KEY_SESSION, None)
     return render(request, 'manage/nameserver_list.html', {
         'nameservers': nameservers,
+        'new_key': new_key,
         'latest_agent_version': settings.LATEST_AGENT_VERSION,
         'stale_minutes': settings.AGENT_STALE_AFTER_MINUTES,
         'agents_need_attention': needs_attention,
     })
+
+
+_NEW_KEY_SESSION = 'nameserver_new_api_key'
+
+
+def _show_key_once(request, ns):
+    request.session[_NEW_KEY_SESSION] = {'pk': ns.pk, 'key': ns.api_key}
 
 
 @staff_required
@@ -263,7 +288,9 @@ def nameserver_add(request):
         ns = form.save()
         _audit(request, AuditLog.Action.CREATE, 'nameserver', ns.pk,
                f'Created nameserver {ns.name}')
-        messages.success(request, f'Nameserver "{ns.name}" added.')
+        messages.success(request, f'Nameserver "{ns.name}" added. Copy its API key now: '
+                                  f'it is only shown once.')
+        _show_key_once(request, ns)
         return redirect('dns_manager:manage_nameserver_list')
     return render(request, 'manage/nameserver_form.html', {
         'form': form, 'title': 'Add Nameserver',
@@ -283,6 +310,19 @@ def nameserver_edit(request, pk):
     return render(request, 'manage/nameserver_form.html', {
         'form': form, 'ns': ns, 'title': f'Edit — {ns.name}',
     })
+
+
+@staff_required
+@require_POST
+def nameserver_regenerate_key(request, pk):
+    ns = get_object_or_404(NameServer, pk=pk)
+    ns.regenerate_api_key()
+    _audit(request, AuditLog.Action.UPDATE, 'nameserver', ns.pk,
+           f'Regenerated the API key for nameserver {ns.name}')
+    messages.success(request, f'New API key for "{ns.name}". The old key no longer works: '
+                              f'put this one in the agent\'s config.ini now (it is only shown once).')
+    _show_key_once(request, ns)
+    return redirect('dns_manager:manage_nameserver_list')
 
 
 @staff_required

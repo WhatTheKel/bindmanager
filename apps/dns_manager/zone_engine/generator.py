@@ -1,3 +1,4 @@
+import re
 from datetime import date
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
@@ -21,12 +22,45 @@ def _bump_serial(current_serial: int) -> int:
     return today
 
 
+# A TXT value already written as one or more "quoted" strings.
+_QUOTED_STRINGS_RE = re.compile(r'^"(?:[^"\\]|\\.)*"(?:\s+"(?:[^"\\]|\\.)*")*$')
+_QUOTED_STRING_RE = re.compile(r'"((?:[^"\\]|\\.)*)"')
+# One character of a zone-file string: \DDD, \X or a plain character.
+_TXT_UNIT_RE = re.compile(r'\\\d{3}|\\.|.', re.DOTALL)
+TXT_STRING_MAX = 255   # bytes in one DNS character-string
+
+
+def _split_txt_string(escaped: str) -> list[str]:
+    """Cut one escaped string body into pieces of at most 255 bytes, never
+    splitting an escape sequence or a multi-byte character."""
+    chunks, current, size = [], '', 0
+    for unit in _TXT_UNIT_RE.findall(escaped):
+        n = 1 if unit.startswith('\\') else len(unit.encode('utf-8'))
+        if size + n > TXT_STRING_MAX:
+            chunks.append(current)
+            current, size = '', 0
+        current += unit
+        size += n
+    chunks.append(current)
+    return chunks
+
+
 def _quote_txt(value: str) -> str:
-    """Ensure a TXT record value is wrapped in double quotes."""
+    """Render a TXT value as one or more quoted strings of at most 255 bytes.
+
+    A value already in quotes ("a" "b") keeps its strings, splitting any that
+    are too long; anything else is escaped and quoted. One string over 255
+    bytes makes named-checkzone reject the whole zone, and long values (a
+    2048-bit DKIM key, say) are normal.
+    """
     v = value.strip()
-    if v.startswith('"') and v.endswith('"'):
-        return v
-    return '"' + v.replace('"', '\\"') + '"'
+    if _QUOTED_STRINGS_RE.match(v):
+        bodies = _QUOTED_STRING_RE.findall(v)
+    elif v.startswith('"') and v.endswith('"'):
+        return v   # quoted in some other way: left as written, as before
+    else:
+        bodies = [v.replace('\\', '\\\\').replace('"', '\\"')]
+    return ' '.join(f'"{chunk}"' for body in bodies for chunk in _split_txt_string(body))
 
 
 def _build_context(zone) -> tuple[dict, list]:

@@ -1,7 +1,7 @@
 import secrets
 
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.contrib.auth.models import User
 from django.db.models.signals import m2m_changed
 from django.dispatch import receiver
@@ -94,6 +94,11 @@ class NameServer(models.Model):
             return False
         limit = timezone.timedelta(minutes=getattr(settings, 'AGENT_STALE_AFTER_MINUTES', 10))
         return timezone.now() - self.agent_last_seen > limit
+
+    @property
+    def api_key_hint(self) -> str:
+        """The key's last 4 characters, to tell keys apart without showing them."""
+        return f'…{self.api_key[-4:]}' if self.api_key else ''
 
     def regenerate_api_key(self):
         self.api_key = secrets.token_hex(32)
@@ -221,7 +226,7 @@ class Record(models.Model):
             errors['priority'] = e.messages
         if self.zone_id:
             try:
-                self.name = normalize_owner(self.name, self.zone.name)
+                self.name = normalize_owner(self.name, self.zone.name, self.record_type)
             except ValidationError as e:
                 errors['name'] = e.messages
         if errors:
@@ -230,19 +235,31 @@ class Record(models.Model):
             validate_record_conflicts(self.zone, self.record_type, self.name,
                                       self.value, self.priority, exclude_pk=self.pk)
 
+    def _lock_zone(self):
+        # Take the zone row's write lock before touching the record. Inserting
+        # a record share-locks the zone row (foreign key) and mark_dirty() then
+        # needs it exclusively, so two concurrent writes to one zone used to
+        # deadlock (MariaDB 1213, a 500 from the API); now they queue.
+        Zone.objects.select_for_update().filter(pk=self.zone_id).values_list('pk').first()
+
     def save(self, *args, **kwargs):
-        old_zone_id = (Record.objects.filter(pk=self.pk).values_list('zone_id', flat=True).first()
-                       if self.pk else None)
-        super().save(*args, **kwargs)
-        self.zone.mark_dirty()
-        if old_zone_id and old_zone_id != self.zone_id:
-            # Moved to another zone: the old one no longer has it
-            _mark_zones_dirty(Zone.objects.filter(pk=old_zone_id))
+        with transaction.atomic():
+            self._lock_zone()
+            old_zone_id = (Record.objects.filter(pk=self.pk).values_list('zone_id', flat=True).first()
+                           if self.pk else None)
+            super().save(*args, **kwargs)
+            self.zone.mark_dirty()
+            if old_zone_id and old_zone_id != self.zone_id:
+                # Moved to another zone: the old one no longer has it
+                _mark_zones_dirty(Zone.objects.filter(pk=old_zone_id))
 
     def delete(self, *args, **kwargs):
         zone = self.zone
-        super().delete(*args, **kwargs)
-        zone.mark_dirty()
+        with transaction.atomic():
+            self._lock_zone()
+            result = super().delete(*args, **kwargs)
+            zone.mark_dirty()
+        return result
 
 
 class AuditLog(models.Model):

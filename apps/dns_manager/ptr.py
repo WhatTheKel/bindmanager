@@ -192,6 +192,76 @@ def sync_ptr(record, user=None, old=None) -> List[PtrChange]:
     return changes
 
 
+def remove_ptr(old: dict, record_pk=None) -> List[PtrChange]:
+    """Delete the PTR record of an A/AAAA record that was just deleted.
+
+    `old` is snapshot() of the deleted record. Only a PTR pointing exactly at
+    its name is removed, and only when no other record still gives that name
+    the same address; anything else is left for a person to sort out.
+    """
+    from .models import Record
+
+    target = _old_ptr_target(old)
+    if not target:
+        return []
+    ip, fqdn = target
+    still_there = (Record.objects.filter(zone__name=old['zone_name'], name__iexact=old['name'],
+                                         record_type=old['record_type'])
+                   .exclude(pk=record_pk))
+    if any(_same_ip(r.value, ip) for r in still_there):
+        return []
+    zone, owner = find_reverse_zone(ip)
+    if zone is None:
+        return []
+    label = f'{owner}.{zone.name}' if owner != '@' else zone.name
+    changes = []
+    for ptr in zone.records.filter(record_type='PTR', name__iexact=owner):
+        if ptr.value.strip().lower() == fqdn:
+            ptr_pk = ptr.pk
+            ptr.delete()
+            changes.append(PtrChange('delete', f'Removed PTR {label} → {ptr.value} (its host was deleted).',
+                                     ptr_pk))
+    return changes
+
+
+def _same_ip(value: str, ip: str) -> bool:
+    try:
+        return str(ipaddress.ip_address(value.strip())) == ip
+    except ValueError:
+        return False
+
+
+def rename_ptrs(old_zone_name: str, new_zone_name: str) -> List[PtrChange]:
+    """Point PTR records at a renamed zone's new name.
+
+    After example.com becomes example.net, a PTR to www.example.com. names a
+    host that no longer exists. Names under a more specific zone that keeps
+    its name (sub.example.com as a zone of its own) are left alone.
+    """
+    from django.db.models import Q
+    from .models import Record, Zone
+
+    old = old_zone_name.lower().rstrip('.')
+    new = new_zone_name.lower().rstrip('.')
+    if old == new:
+        return []
+    children = [z for z in Zone.objects.filter(name__iendswith=f'.{old}').values_list('name', flat=True)]
+    changes = []
+    ptrs = (Record.objects.select_related('zone').filter(record_type='PTR')
+            .filter(Q(value__iexact=f'{old}.') | Q(value__iendswith=f'.{old}.')))
+    for ptr in ptrs:
+        value = ptr.value.strip()
+        if any(value.lower() == f'{c}.' or value.lower().endswith(f'.{c}.') for c in children):
+            continue
+        before = value
+        ptr.value = f'{value[:len(value) - len(old) - 1]}{new}.'
+        ptr.save()
+        label = f'{ptr.name}.{ptr.zone.name}' if ptr.name not in ('@', '') else ptr.zone.name
+        changes.append(PtrChange('update', f'Updated PTR {label}: {before} → {ptr.value} (zone renamed)',
+                                 ptr.pk))
+    return changes
+
+
 def snapshot(record) -> dict:
     """The fields sync_ptr() needs to know what a record was before an edit."""
     return {

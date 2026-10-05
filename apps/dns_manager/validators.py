@@ -10,6 +10,10 @@ from django.core.exceptions import ValidationError
 _HOSTNAME_TYPES = {'NS', 'CNAME', 'PTR', 'MX'}
 
 
+# CAA: flags (0-255), a tag of letters/digits, then the value.
+_CAA_RE = re.compile(r'^(\d{1,3})\s+([A-Za-z0-9]+)\s+(\S.*)$')
+
+
 def _is_ip(value: str) -> bool:
     try:
         ipaddress.ip_address(value)
@@ -56,6 +60,14 @@ def validate_record_value(record_type: str, value: str) -> None:
         if _is_ip(parts[2].rstrip('.')):
             raise ValidationError('The SRV target must be a hostname, not an IP address.')
 
+    elif record_type == 'CAA':
+        match = _CAA_RE.match(value)
+        if not match or int(match.group(1)) > 255:
+            raise ValidationError(
+                'CAA value must be "flags tag value", e.g. 0 issue "letsencrypt.org" '
+                '(flags 0-255; tag such as issue, issuewild or iodef).'
+            )
+
 
 def validate_priority(record_type: str, priority) -> None:
     """MX and SRV lines need a priority, or the zone file gets "MX None host"."""
@@ -85,6 +97,26 @@ def _check_labels(name: str, what: str, allow_wildcard: bool = False) -> None:
             )
 
 
+# A host name in BIND's check-names sense: no "_" (unlike other DNS names).
+_HOSTNAME_LABEL_RE = re.compile(r'^(?!-)[A-Za-z0-9-]{1,63}(?<!-)$')
+# Owners that must be host names, and types whose target must be one. named
+# refuses to load a primary zone that breaks this (check-names fail), while
+# named-checkzone by default only warns.
+_HOSTNAME_OWNER_TYPES = {'A', 'AAAA', 'MX'}
+_HOSTNAME_TARGET_TYPES = {'MX', 'NS', 'SRV'}
+
+
+def _check_hostname(name: str, what: str, allow_wildcard: bool = False) -> None:
+    for i, label in enumerate(name.rstrip('.').split('.')):
+        if allow_wildcard and i == 0 and label == '*':
+            continue
+        if not _HOSTNAME_LABEL_RE.match(label):
+            raise ValidationError(
+                f'"{name}" is not a valid {what}: a host name may only use letters, '
+                f'digits and "-" (no "_"), separated by dots.'
+            )
+
+
 def normalize_zone_name(name: str) -> str:
     """Lower-case, drop a trailing dot, and check it's a valid domain name."""
     name = (name or '').strip().lower().rstrip('.')
@@ -94,7 +126,7 @@ def normalize_zone_name(name: str) -> str:
     return name
 
 
-def normalize_owner(name: str, zone_name: str) -> str:
+def normalize_owner(name: str, zone_name: str, record_type: str = None) -> str:
     """Return the record name relative to the zone ('@' for the apex), or raise.
 
     A name without a trailing dot is relative to the zone in a zone file, so
@@ -121,6 +153,8 @@ def normalize_owner(name: str, zone_name: str) -> str:
                 f'e.g. "www" or "www.{zone}".'
             )
     _check_labels(raw, 'record name', allow_wildcard=True)
+    if record_type in _HOSTNAME_OWNER_TYPES:
+        _check_hostname(raw, f'name for an {record_type} record', allow_wildcard=True)
     return raw
 
 
@@ -150,6 +184,11 @@ def normalize_target(record_type: str, value: str, zone_name: str) -> str:
     if not value:
         return value
     head, sep, target = value.rpartition(' ') if record_type == 'SRV' else ('', '', value)
+    if target != '@':
+        if record_type in _HOSTNAME_TARGET_TYPES:
+            _check_hostname(target, f'{record_type} target')
+        else:
+            _check_labels(target.rstrip('.'), f'{record_type} target')
     if target.endswith('.') or target == '@' or '.' not in target:
         return value
 
@@ -187,6 +226,23 @@ def _same_value(record_type: str, a: str, b: str) -> bool:
     if record_type in ('TXT', 'CAA'):
         return a == b
     return a.lower() == b.lower()
+
+
+def _in_zone_target(record_type, value, zone_name):
+    """The zone-relative owner a hostname target points to ('@' for the
+    apex), or None if it isn't a hostname type or is outside the zone."""
+    if record_type not in _TARGET_TYPES:
+        return None
+    target = (value or '').strip().split()[-1:] or ['']
+    target = target[0].lower()
+    zone = zone_name.lower().rstrip('.')
+    if target in ('@', f'{zone}.'):
+        return '@'
+    if target.endswith(f'.{zone}.'):
+        return target[:-len(zone) - 2]
+    if target.endswith('.') or not target:
+        return None
+    return target   # relative to the zone
 
 
 def validate_record_conflicts(zone, record_type, name, value,
@@ -227,6 +283,22 @@ def validate_record_conflicts(zone, record_type, name, value,
             raise ValidationError({'value': (
                 f'{label} already has this {record_type} record. '
                 f'To add another, use a different value.'
+            )})
+
+    target = _in_zone_target(record_type, value, zone.name)
+    if record_type == 'CNAME' and target == owner:
+        raise ValidationError({'value': (
+            f'A CNAME can\'t point to its own name ({label}): lookups would loop.'
+        )})
+    if record_type in ('MX', 'SRV', 'NS') and target is not None:
+        target_q = Q(name__iexact=target)
+        if target == '@':
+            target_q |= Q(name='') | Q(name__iexact=f'{zone.name.rstrip(".")}.')
+        if zone.records.filter(target_q, record_type='CNAME', is_active=True).exists():
+            raise ValidationError({'value': (
+                f'"{target}" is a CNAME, and an {record_type} record must point to a '
+                f'name with its own A/AAAA records (RFC 2181). Point it at the '
+                f'CNAME\'s target instead.'
             )})
 
     if record_type == 'CNAME':

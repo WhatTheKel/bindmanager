@@ -21,7 +21,8 @@ only the zones assigned to it, validating, and reloading locally.
 ## Setup (per nameserver)
 
 1. In BindManager: **Manage > Nameservers**, create (or find) the row for
-   this server, copy its **Agent API Key**.
+   this server, copy its **Agent API Key** (shown in full only once, right
+   after saving; **Regenerate** on the row makes a new one).
 2. Copy `bindmanager_agent.py` to the server (e.g. `/opt/bindmanager-agent/`).
    Stdlib only — no `pip install` required.
 3. Copy `config.example.ini` to `/etc/bindmanager-agent/config.ini`, fill in
@@ -88,7 +89,7 @@ any `ExecStart` edit you made (e.g. `python3.9` on RHEL 8). See
 
 ## Rotating a compromised key
 
-In the Django admin: `/admin/` > **Name servers** > tick the row > action
-**"Regenerate API key"** (the Manage UI shows keys but can't rotate them).
+In **Manage > Nameservers**, click **Regenerate** on the row (or, in the
+Django admin, the **"Regenerate API key"** action). The new key is shown once.
 Update `config.ini` on that server and re-run the agent — the old key stops
 working immediately.

@@ -48,14 +48,24 @@
           <td class="monospace" style="font-weight:600">{{ ns.name }}</td>
           <td class="monospace">{{ ns.address }}</td>
           <td class="monospace text-sm" style="color:var(--text-muted);white-space:nowrap">
-            <span class="key-cell" title="Shortened — use the copy button for the full key">{{ ns.api_key }}</span>
-            <button type="button" class="copy-inline" data-copy="{{ ns.api_key }}"
+            {% if new_key and new_key.pk == ns.pk %}
+            <span class="key-cell" title="Shown once — copy it now">{{ new_key.key }}</span>
+            <button type="button" class="copy-inline" data-copy="{{ new_key.key }}"
                     title="Copy the full API key (for the agent's config.ini)"
                     aria-label="Copy API key for {{ ns.name }}">
               <svg class="icon-copy" aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
               <svg class="icon-done" aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
               <span class="copy-label" aria-live="polite"></span>
             </button>
+            <div class="text-xs" style="color:var(--amber, #b45309)">Shown once — copy it now.</div>
+            {% else %}
+            <span title="Only the end of the key is shown. Regenerate it to get a new one.">{{ ns.api_key_hint }}</span>
+            <form method="post" action="{% url 'dns_manager:manage_nameserver_regenerate_key' ns.pk %}" style="display:inline"
+                  onsubmit="return confirm('Regenerate the API key for {{ ns.name|escapejs }}? The agent stops working until you put the new key in its config.ini.');">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-ghost btn-xs" title="Make a new key (the old one stops working)">Regenerate</button>
+            </form>
+            {% endif %}
           </td>
           <td>
             {% if ns.is_active %}

@@ -75,7 +75,7 @@ class RecordSerializer(serializers.ModelSerializer):
             errors['priority'] = e.messages
         if zone is not None:
             try:
-                name = normalize_owner(name, zone.name)
+                name = normalize_owner(name, zone.name, record_type)
             except DjangoValidationError as e:
                 errors['name'] = e.messages
         if errors:

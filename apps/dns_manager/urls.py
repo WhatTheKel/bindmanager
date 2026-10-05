@@ -29,6 +29,8 @@ urlpatterns = [
     path('manage/nameservers/add/', manage_views.nameserver_add, name='manage_nameserver_add'),
     path('manage/nameservers/<int:pk>/edit/', manage_views.nameserver_edit, name='manage_nameserver_edit'),
     path('manage/nameservers/<int:pk>/delete/', manage_views.nameserver_delete, name='manage_nameserver_delete'),
+    path('manage/nameservers/<int:pk>/regenerate-key/', manage_views.nameserver_regenerate_key,
+         name='manage_nameserver_regenerate_key'),
 
     path('manage/audit/', manage_views.audit_log, name='manage_audit_log'),
 

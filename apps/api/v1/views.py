@@ -8,6 +8,7 @@ from django.db import transaction
 from django.db.models import Count, Q
 
 from apps.dns_manager.models import Zone, Record, NameServer, AuditLog
+from apps.dns_manager.ptr import remove_ptr, rename_ptrs, snapshot
 from .serializers import (
     ZoneListSerializer, ZoneDetailSerializer,
     RecordSerializer, NameServerSerializer, AuditLogSerializer,
@@ -103,6 +104,17 @@ class ZoneViewSet(AuditMixin, viewsets.ModelViewSet):
     def _audit_label(self, instance):
         return instance.name
 
+    @transaction.atomic
+    def perform_update(self, serializer):
+        old_name = serializer.instance.name
+        super().perform_update(serializer)
+        for change in rename_ptrs(old_name, serializer.instance.name):
+            AuditLog.objects.create(
+                user=self.request.user, action=AuditLog.Action.UPDATE,
+                entity_type=change.entity_type, entity_id=change.entity_id,
+                detail=f'[API] {change.message}',
+            )
+
     @action(detail=True, methods=['get'], url_path='records')
     def zone_records(self, request, pk=None):
         """GET /api/v1/zones/<id>/records/ — records scoped to a single zone."""
@@ -160,7 +172,10 @@ class RecordViewSet(AuditMixin, viewsets.ModelViewSet):
     }
 
     def _audit_ptr(self, serializer):
-        for change in serializer.ptr_changes:
+        self._audit_ptr_changes(serializer.ptr_changes)
+
+    def _audit_ptr_changes(self, changes):
+        for change in changes:
             if change.action in self._PTR_AUDIT:
                 AuditLog.objects.create(
                     user=self.request.user, action=self._PTR_AUDIT[change.action],
@@ -178,6 +193,12 @@ class RecordViewSet(AuditMixin, viewsets.ModelViewSet):
     def perform_update(self, serializer):
         super().perform_update(serializer)
         self._audit_ptr(serializer)
+
+    @transaction.atomic
+    def perform_destroy(self, instance):
+        before, pk = snapshot(instance), instance.pk
+        super().perform_destroy(instance)
+        self._audit_ptr_changes(remove_ptr(before, pk))
 
 
 class NameServerViewSet(AuditMixin, viewsets.ModelViewSet):

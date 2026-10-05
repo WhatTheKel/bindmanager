@@ -140,10 +140,50 @@ def test_last_seen_wording():
     assert NameServer(name='m', address='192.0.2.2').agent_last_seen_ago == ''
 
 
-def test_nameserver_page_has_copy_button_with_full_key(client):
+def test_nameserver_page_shows_only_the_end_of_each_key(client):
     staff = User.objects.create_user('s', password='x', is_staff=True)
     ns = NameServer.objects.create(name='ns.example', address='192.0.2.9')
     client.force_login(staff)
     html = client.get(reverse('dns_manager:manage_nameserver_list')).content.decode()
-    assert f'data-copy="{ns.api_key}"' in html
-    assert 'aria-label="Copy API key for ns.example"' in html
+    assert ns.api_key not in html
+    assert f'…{ns.api_key[-4:]}' in html
+    assert reverse('dns_manager:manage_nameserver_regenerate_key', args=[ns.pk]) in html
+
+
+def test_new_nameserver_key_is_shown_once_with_copy_button(client):
+    staff = User.objects.create_user('s', password='x', is_staff=True)
+    client.force_login(staff)
+    client.post(reverse('dns_manager:manage_nameserver_add'),
+                {'name': 'ns.example', 'address': '192.0.2.9', 'config_dir': '/var/named', 'is_active': 'on'})
+    ns = NameServer.objects.get(name='ns.example')
+    url = reverse('dns_manager:manage_nameserver_list')
+    first = client.get(url).content.decode()
+    assert f'data-copy="{ns.api_key}"' in first
+    assert 'aria-label="Copy API key for ns.example"' in first
+    assert ns.api_key not in client.get(url).content.decode()   # only once
+
+
+def test_regenerate_key_replaces_it_shows_it_once_and_audits(client):
+    from apps.dns_manager.models import AuditLog
+    staff = User.objects.create_user('s', password='x', is_staff=True)
+    ns = NameServer.objects.create(name='ns.example', address='192.0.2.9')
+    old_key = ns.api_key
+    client.force_login(staff)
+    regen = reverse('dns_manager:manage_nameserver_regenerate_key', args=[ns.pk])
+    assert client.get(regen).status_code == 405            # POST only
+    html = client.post(regen, follow=True).content.decode()
+    ns.refresh_from_db()
+    assert ns.api_key != old_key
+    assert f'data-copy="{ns.api_key}"' in html and old_key not in html
+    assert AuditLog.objects.filter(entity_type='nameserver', entity_id=ns.pk,
+                                   detail__contains='Regenerated the API key').exists()
+
+
+def test_regenerate_key_needs_staff(client):
+    user = User.objects.create_user('u', password='x', is_staff=False)
+    ns = NameServer.objects.create(name='ns.example', address='192.0.2.9')
+    old_key = ns.api_key
+    client.force_login(user)
+    client.post(reverse('dns_manager:manage_nameserver_regenerate_key', args=[ns.pk]))
+    ns.refresh_from_db()
+    assert ns.api_key == old_key

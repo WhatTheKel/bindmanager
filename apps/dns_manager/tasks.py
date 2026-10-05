@@ -77,7 +77,7 @@ def sync_zone(zone_pk: int):
         try:
             content, new_serial = build_zone(zone)
             atomic_write(zone.name, content)
-            reload_zone(zone.name)
+            reload_zone(zone.name, new_serial)
         except Exception as exc:
             log.warning('sync of %s failed: %s', zone.name, exc)
             _log_sync(zone_pk, f'Sync failed for {zone.name}: {exc}')

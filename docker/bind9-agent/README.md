@@ -56,7 +56,8 @@ starts inside this container.
 On the nameserver host (BIND9 already installed and running):
 
 1. In BindManager: **Manage > Nameservers**, create (or find) the row for
-   this server, copy its **Agent API Key**.
+   this server, copy its **Agent API Key** (shown in full only once, right
+   after saving; **Regenerate** on the row makes a new one).
 2. If using the generated config include, add one line to this host's
    `named.conf` (once):
    ```

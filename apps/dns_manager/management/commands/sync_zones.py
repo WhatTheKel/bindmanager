@@ -23,7 +23,7 @@ class Command(BaseCommand):
             try:
                 content, new_serial = build_zone(zone)
                 atomic_write(zone.name, content)
-                reload_zone(zone.name)
+                reload_zone(zone.name, new_serial)
                 Zone.objects.filter(pk=zone.pk).update(is_dirty=False, serial=new_serial)
                 AuditLog.objects.create(
                     action=AuditLog.Action.SYNC,

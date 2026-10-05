@@ -84,7 +84,7 @@ firewall-cmd --permanent --add-service=dns && firewall-cmd --reload
 **Manage → Nameservers → + Add:** name `NS_NAME` (full DNS name — this is
 what goes into the zones' NS records), address `NS_IP`, config dir
 `/var/named/bindmanager`, active ✔. Save, copy the **Agent API Key**
-from the list. Don't assign zones yet.
+from the list (shown only once — **Regenerate** makes a new one). Don't assign zones yet.
 
 ### B3. Agent
 
@@ -188,7 +188,7 @@ cd /root/bindmanager && git pull && ./agents/update-agent.sh
 |---|---|
 | `dig` → `REFUSED`, named log says `query (cache) ... denied` | Zone not loaded → `journalctl -u bindmanager-agent.service` |
 | Agent: `FileNotFoundError ... /etc/bind/...` | A Debian path left in `config.ini` → rerun the `sed` in B3, then `systemctl start bindmanager-agent.service` |
-| Agent: HTTP 401 | Wrong API key → recopy from Manage → Nameservers (rotate a leaked key: `/admin/` → Name servers → *Regenerate API key* action) |
+| Agent: HTTP 401 | Wrong API key → **Regenerate** it in Manage → Nameservers and put the new one in `config.ini` |
 | Agent: `URLError` / timeout | VM can't reach `APP_IP:81` → `curl http://APP_IP:81/` |
 | Zone never reaches the agent | App side not syncing → `docker compose logs worker \| grep -A3 checkzone` shows why; is the sync schedule (A) there? |
 | `ns1.ZONE` no answer, no `aa` | `ns1` is an NS record → make it an A record |

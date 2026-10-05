@@ -33,6 +33,7 @@ import logging
 import re
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -42,7 +43,7 @@ from pathlib import Path
 # "Releasing"). Sent as the User-Agent on every request; the app shows it
 # per nameserver in Manage > Nameservers and flags agents older than its own
 # copy of this file.
-AGENT_VERSION = '0.2.4'
+AGENT_VERSION = '0.2.10'
 
 log = logging.getLogger('bindmanager_agent')
 
@@ -149,8 +150,11 @@ def write_zone_file(cfg: Config, name: str, content: str) -> None:
     tmp = cfg.zones_dir / f'{name}.zone.tmp'
     tmp.write_text(content, encoding='utf-8')
     try:
+        # -k fail: named refuses a primary zone with a bad host name, but
+        # named-checkzone on its own only warns, so a zone could pass here
+        # and then not load.
         result = subprocess.run(
-            [cfg.checkzone_bin, name, str(tmp)], capture_output=True, text=True,
+            [cfg.checkzone_bin, '-k', 'fail', name, str(tmp)], capture_output=True, text=True,
         )
         if result.returncode != 0:
             # named-checkzone/-checkconf report errors on stdout, not stderr
@@ -158,6 +162,22 @@ def write_zone_file(cfg: Config, name: str, content: str) -> None:
         tmp.replace(dest)
     finally:
         tmp.unlink(missing_ok=True)
+
+
+def restore_zone_file(cfg: Config, name: str, content: str | None) -> None:
+    """Put back the zone file from before this run (or remove a new one) and
+    reload it, after named refused the new file."""
+    dest = cfg.zones_dir / f'{name}.zone'
+    if content is None:
+        dest.unlink(missing_ok=True)
+        return
+    tmp = cfg.zones_dir / f'{name}.zone.tmp'
+    tmp.write_text(content, encoding='utf-8')
+    tmp.replace(dest)
+    try:
+        reload_zone(cfg, name)
+    except RuntimeError as exc:
+        log.error('reloading the restored %s failed: %s', name, exc)
 
 
 def remove_zone_file(cfg: Config, name: str) -> None:
@@ -198,6 +218,51 @@ def reload_zone(cfg: Config, name: str) -> None:
         raise RuntimeError(f'rndc reload failed for {name}:\n{result.stderr}')
 
 
+_LOADED_SERIAL_RE = re.compile(r'^serial:\s*(\d+)', re.MULTILINE)
+LOAD_WAIT_SECONDS = 10
+
+
+class StatusUnavailable(Exception):
+    """rndc couldn't say what named is serving (not a "zone not loaded")."""
+
+
+def loaded_serial(cfg: Config, name: str) -> int | None:
+    """The serial named is serving for `name`, or None if it isn't loaded."""
+    result = subprocess.run([cfg.rndc_bin, 'zonestatus', name], capture_output=True, text=True)
+    output = (result.stdout or '') + (result.stderr or '')
+    match = _LOADED_SERIAL_RE.search(result.stdout or '')
+    if result.returncode == 0 and match:
+        return int(match.group(1))
+    if 'not found' in output or 'no matching zone' in output or 'not loaded' in output:
+        return None
+    raise StatusUnavailable(output.strip() or f'rndc exited {result.returncode}')
+
+
+def wait_for_serials(cfg: Config, expected: dict[str, int]) -> dict[str, int | None]:
+    """Wait for named to serve each zone at its expected serial; return the
+    zones it didn't load, with the serial it is serving instead.
+
+    `rndc reload` only queues a load and succeeds even when named then
+    rejects the file and keeps the old version, so it proves nothing alone.
+    """
+    pending = dict(expected)
+    deadline = time.monotonic() + LOAD_WAIT_SECONDS
+    while True:
+        serving = {}
+        for name in list(pending):
+            try:
+                serving[name] = loaded_serial(cfg, name)
+            except StatusUnavailable as exc:
+                # Can't check (old BIND, rndc access): trust the reload, as
+                # agents before 0.2.10 did, rather than roll back good zones.
+                log.warning('cannot check that %s loaded (rndc zonestatus: %s)', name, exc)
+                del pending[name]
+        pending = {n: s for n, s in pending.items() if serving[n] != s}
+        if not pending or time.monotonic() >= deadline:
+            return {n: serving[n] for n in pending}
+        time.sleep(0.5)
+
+
 def reload_all(cfg: Config) -> None:
     result = subprocess.run([cfg.rndc_bin, 'reload'], capture_output=True, text=True)
     if result.returncode != 0:
@@ -211,6 +276,8 @@ def sync(cfg: Config, dry_run: bool = False) -> int:
 
     changed: list[str] = []
     failed: list[str] = []
+    previous: dict[str, str | None] = {}   # file content before this run's write
+    expected: dict[str, int] = {}          # serial each written file should load
     for name, zone in assigned_by_name.items():
         on_disk = local_serial(cfg, name)
         if on_disk == zone['serial']:
@@ -221,9 +288,12 @@ def sync(cfg: Config, dry_run: bool = False) -> int:
             continue
         # One bad zone must not hold back every other zone's update: log it,
         # keep serving whatever file this server already has, and move on.
+        zone_file = cfg.zones_dir / f'{name}.zone'
         try:
             detail = fetch_zone_content(cfg, name)
+            previous[name] = zone_file.read_text(encoding='utf-8') if zone_file.exists() else None
             write_zone_file(cfg, name, detail['content'])
+            expected[name] = detail['serial']
         except Exception as exc:
             log.error('zone %s not updated: %s', name, exc)
             failed.append(name)
@@ -253,6 +323,19 @@ def sync(cfg: Config, dry_run: bool = False) -> int:
     else:
         for name in changed:
             reload_zone(cfg, name)
+
+    # A file named won't load (it keeps serving the old version) goes back to
+    # the previous one, so the file on disk always matches what is served, a
+    # restart of named can't take the zone down, and the next run retries.
+    for name, serving in wait_for_serials(cfg, expected).items():
+        log.error('zone %s not updated: named did not load serial %s (serving %s); '
+                  'its log says why. Restoring the previous file.',
+                  name, expected[name], serving)
+        restore_zone_file(cfg, name, previous.get(name))
+        changed.remove(name)
+        failed.append(name)
+        if name in present and previous.get(name) is None:
+            del present[name]
 
     new_manifest = {name: z['serial'] for name, z in present.items()}
     save_manifest(cfg, new_manifest)

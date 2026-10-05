@@ -296,7 +296,7 @@ In the app: **Manage → Nameservers → + Add Nameserver**.
   BIND9's actual zone directory (commonly `/etc/bind/zones`).
 
 Save it, then copy the **Agent API Key** shown on the row — you'll need it
-next.
+next. It is shown in full only once, on the list right after saving — copy it then (lost it? **Regenerate** on the row makes a new one).
 
 ### 4.2 Install the agent
 
@@ -406,7 +406,7 @@ If all of that resolves, the full pipeline — UI → database → Celery sync
 | `web`/`worker` can't reach MariaDB/Redis | Service still bound to `127.0.0.1` only | Re-check Part 1.1 / 1.2's `bind-address` edits; `systemctl restart mariadb redis-server` after changing |
 | Zone `"has no address records"` in `docker compose logs bind` | An in-bailiwick NS record (e.g. `ns1.<zone>`) has no matching A/AAAA record in the same zone | Add the missing glue record |
 | Agent's `--dry-run` shows an empty zone list forever | Zone hasn't passed its first sync yet (Celery not running, or a record fails `named-checkzone`), or the NameServer row has no zones assigned, or `is_active=False` | Check Manage → Zones assignment; confirm Part 3's checkpoint passed |
-| Agent gets HTTP 401 | Wrong API key in `config.ini`, or it was regenerated since | Re-copy the key from Manage → Nameservers |
+| Agent gets HTTP 401 | Wrong API key in `config.ini`, or it was regenerated since | Regenerate the key in Manage → Nameservers and put the new one in `config.ini` |
 | Agent gets HTTP 404 on a specific zone | Zone isn't assigned to this NameServer, or has never passed a sync | Check assignment / wait for sync |
 | `systemctl status bindmanager-agent.timer` shows inactive | Timer not enabled | `systemctl enable --now bindmanager-agent.timer` |
 | `dig @localhost` returns nothing | `named.conf`'s `include` line missing, or BIND9 needs a reload | Confirm the include from 4.2; `rndc reload` manually to see the real error |
@@ -421,7 +421,7 @@ If all of that resolves, the full pipeline — UI → database → Celery sync
 - [ ] Firewalled MariaDB (3306) and Redis (6379) to Docker's subnet only — not `0.0.0.0/0`
 - [ ] `chmod 600` on `/etc/bindmanager-agent/config.ini` (it's an API key)
 - [ ] TLS terminated in front of Nginx — this repo runs plain HTTP on :81 by default; put a reverse proxy or load balancer with a real cert in front for anything beyond a lab
-- [ ] Rotate the NameServer's API key if it ever leaks: in the Django admin (`/admin/` → **Name servers**), tick the row, choose the **Regenerate API key** action, then update `config.ini` on that server (the old key stops working immediately)
+- [ ] Rotate the NameServer's API key if it ever leaks: **Manage → Nameservers** → **Regenerate** on the row, then update `config.ini` on that server (the old key stops working immediately)
 - [ ] `.env` and `/etc/bindmanager-agent/config.ini` are not committed to version control
 
 ---

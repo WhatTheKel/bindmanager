@@ -240,7 +240,7 @@ docker compose logs --since 2m beat | grep sync_dirty_zones   # want "Sending du
 - `config_dir` — `/var/named/bindmanager` (informational)
 - `is_active` — checked
 
-Save, then copy the **Agent API Key** from the list.
+Save, then copy the **Agent API Key** from the list: it is shown in full only once, on the list right after saving — copy it then (lost it? **Regenerate** on the row makes a new one).
 
 ### 4.2 Install and configure the agent
 
@@ -338,8 +338,8 @@ App-side problems specific to a RHEL host:
 - [ ] `chmod 600 /etc/bindmanager-agent/config.ini`
 - [ ] TLS in front of Nginx for anything beyond a lab — the app serves
       plain HTTP on :81
-- [ ] Rotate a leaked agent key: `/admin/` → **Name servers** → tick the
-      row → **Regenerate API key** action, then update `config.ini`
+- [ ] Rotate a leaked agent key: **Manage → Nameservers** → **Regenerate**
+      on the row, then update `config.ini`
 
 ---
 

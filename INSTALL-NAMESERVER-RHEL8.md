@@ -174,7 +174,7 @@ In the BindManager UI:
    - `config_dir` — `/var/named/bindmanager` — informational only (the
      agent uses `zones_dir` from its own `config.ini`, Part 4.3)
    - `is_active` — checked
-2. Save, then copy the row's **Agent API Key**.
+2. Save, then copy the row's **Agent API Key**: it is shown in full only once, on the list right after saving — copy it then (lost it? **Regenerate** on the row makes a new one).
 3. Don't assign zones yet — do the dry run in Part 5 with none assigned
    first, then add a test zone in Part 6.
 
@@ -432,7 +432,7 @@ details, including updating without git: [`UPDATING.md`](UPDATING.md) Part 2.
 - [ ] The agent's API key travels over plain HTTP by default — acceptable
       on a trusted internal network only; otherwise put TLS in front of the
       app and use an `https://` `api_url`
-- [ ] If the key ever leaks: Django admin (`/admin/` → **Name servers**) →
-      tick the row → **Regenerate API key** action, then update
+- [ ] If the key ever leaks: **Manage → Nameservers** → **Regenerate** on
+      the row, then update
       `api_key` in `config.ini` (the old key stops working immediately;
       the next timer run uses the new one)
