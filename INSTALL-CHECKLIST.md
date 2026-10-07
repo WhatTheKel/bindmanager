@@ -2,16 +2,16 @@
 
 The short version, for when you've done this before. Every step is a
 command to paste or a field to fill in. For the *why* behind each step
-and full troubleshooting, see [`INSTALL-RHEL8.md`](INSTALL-RHEL8.md) or
+and full troubleshooting, see [`INSTALL-RHEL.md`](INSTALL-RHEL.md) or
 [`INSTALL-DEBIAN.md`](INSTALL-DEBIAN.md) (the app, from scratch) and
-[`INSTALL-NAMESERVER-RHEL8.md`](INSTALL-NAMESERVER-RHEL8.md) (a RHEL 8 nameserver).
+[`INSTALL-NAMESERVER-RHEL.md`](INSTALL-NAMESERVER-RHEL.md) (a RHEL 8, 9 or 10 nameserver).
 
 Fill these in once, then substitute them below:
 
 | Placeholder | Meaning | Example |
 |---|---|---|
 | `APP_IP` | Host running the BindManager app (Docker) | `192.0.2.10` |
-| `NS_IP` | The RHEL 8 VM that will answer DNS | `192.0.2.20` |
+| `NS_IP` | The RHEL 8, 9 or 10 VM that will answer DNS | `192.0.2.20` |
 | `NS_NAME` | That VM's DNS name | `ns1.example.com` |
 | `ZONE` | A domain to test with | `example.com` |
 
@@ -20,7 +20,7 @@ Fill these in once, then substitute them below:
 ## A. App host — once
 
 Assumes MariaDB, Redis and Docker are installed and `.env` is filled in
-(Parts 1–2 of `INSTALL-RHEL8.md` or `INSTALL-DEBIAN.md`).
+(Parts 1–2 of `INSTALL-RHEL.md` or `INSTALL-DEBIAN.md`).
 
 ```bash
 cd bindmanager
@@ -46,12 +46,13 @@ docker compose logs --since 2m beat | grep sync_dirty_zones   # want "Sending du
 
 ---
 
-## B. RHEL 8 nameserver — per server
+## B. RHEL nameserver (8, 9 or 10) — per server
 
 ### B1. BIND
 
 ```bash
-dnf install -y bind bind-utils python39 git
+dnf install -y bind bind-utils git
+dnf install -y python39                  # RHEL 8 only — skip on RHEL 9 and 10
 ```
 
 In `/etc/named.conf`, inside `options { }`, set:
@@ -95,7 +96,7 @@ mkdir -p /opt/bindmanager-agent /etc/bindmanager-agent
 \cp -f agents/bindmanager_agent.py /opt/bindmanager-agent/
 \cp -f agents/config.example.ini /etc/bindmanager-agent/config.ini
 \cp -f agents/systemd/bindmanager-agent.{service,timer} /etc/systemd/system/
-sed -i 's|/usr/bin/python3 |/usr/bin/python3.9 |' /etc/systemd/system/bindmanager-agent.service
+sed -i 's|/usr/bin/python3 |/usr/bin/python3.9 |' /etc/systemd/system/bindmanager-agent.service   # RHEL 8 ONLY — skip on 9/10
 chmod 600 /etc/bindmanager-agent/config.ini
 ```
 
@@ -117,7 +118,7 @@ grep -n '/etc/bind/' /etc/bindmanager-agent/config.ini && echo "FIX THESE" || ec
 Test, then enable:
 
 ```bash
-python3.9 /opt/bindmanager-agent/bindmanager_agent.py --config /etc/bindmanager-agent/config.ini --dry-run -v
+python3 /opt/bindmanager-agent/bindmanager_agent.py --config /etc/bindmanager-agent/config.ini --dry-run -v   # RHEL 8: python3.9
 # want: "dry-run: 0 changed, 0 removed"
 systemctl daemon-reload && systemctl enable --now bindmanager-agent.timer
 ```
@@ -194,4 +195,4 @@ cd /root/bindmanager && git pull && ./agents/update-agent.sh
 | `ns1.ZONE` no answer, no `aa` | `ns1` is an NS record → make it an A record |
 | Remote `dig` times out, local works | `firewall-cmd --list-services` includes `dns`? `listen-on { any; }`? |
 
-Full table: [`INSTALL-NAMESERVER-RHEL8.md` → Troubleshooting](INSTALL-NAMESERVER-RHEL8.md#troubleshooting-rhel-specific).
+Full table: [`INSTALL-NAMESERVER-RHEL.md` → Troubleshooting](INSTALL-NAMESERVER-RHEL.md#troubleshooting-rhel-specific).

@@ -13,19 +13,19 @@ you're setting up:
 
 | I want to… | Read |
 |---|---|
-| Install everything from scratch on one **RHEL 8** server (BIND + app + agent) | [`INSTALL-RHEL8.md`](INSTALL-RHEL8.md) |
+| Install everything from scratch on one **RHEL 8, 9 or 10** server (BIND + app + agent) | [`INSTALL-RHEL.md`](INSTALL-RHEL.md) |
 | Install everything from scratch on one **Debian/Ubuntu** server (BIND + app + agent) | [`INSTALL-DEBIAN.md`](INSTALL-DEBIAN.md) — also the fullest explanation of how the pieces fit |
-| Add a **RHEL 8** server as an extra nameserver for an app that's already running | [`INSTALL-NAMESERVER-RHEL8.md`](INSTALL-NAMESERVER-RHEL8.md) — BIND, SELinux, firewalld, agent, troubleshooting |
-| Repeat an install I've done before, quickly | [`INSTALL-CHECKLIST.md`](INSTALL-CHECKLIST.md) — copy-paste steps only (app + RHEL 8 nameserver + test zone) |
+| Add a **RHEL 8, 9 or 10** server as an extra nameserver for an app that's already running | [`INSTALL-NAMESERVER-RHEL.md`](INSTALL-NAMESERVER-RHEL.md) — BIND, SELinux, firewalld, agent, troubleshooting |
+| Repeat an install I've done before, quickly | [`INSTALL-CHECKLIST.md`](INSTALL-CHECKLIST.md) — copy-paste steps only (app + RHEL nameserver + test zone) |
 | Understand or configure the pull agent itself | [`agents/README.md`](agents/README.md) |
 | Run a nameserver as a Docker container (BIND + agent together) | [`docker/bind9-node/README.md`](docker/bind9-node/README.md) |
 | Keep BIND on the host but run only the agent in Docker | [`docker/bind9-agent/README.md`](docker/bind9-agent/README.md) |
 | Update an existing install to the latest code | [`UPDATING.md`](UPDATING.md) — app host rebuild, nameserver agents, rollback |
 | Look up app features, REST API, config, branding, SSO | This README (below) |
 
-**New here?** Start with `INSTALL-RHEL8.md` or `INSTALL-DEBIAN.md`
+**New here?** Start with `INSTALL-RHEL.md` or `INSTALL-DEBIAN.md`
 (whichever matches your OS) — you end with one working server. Add more
-nameservers later with `INSTALL-NAMESERVER-RHEL8.md` (RHEL) or the
+nameservers later with `INSTALL-NAMESERVER-RHEL.md` (RHEL) or the
 "Scaling beyond one server" section of `INSTALL-DEBIAN.md`. Once you've
 done it once, `INSTALL-CHECKLIST.md` is all you need next time. To pick up
 new versions later, follow `UPDATING.md`.

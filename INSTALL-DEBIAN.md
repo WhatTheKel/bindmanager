@@ -4,7 +4,7 @@ This is a start-to-finish runbook for the most common real starting point:
 **one brand-new Debian/Ubuntu VM, no existing zone data, and you want
 BindManager to manage the DNS it serves.** Everything — BIND9, the
 BindManager app, and the pull agent that connects them — runs on this one
-box. (On RHEL 8, use [`INSTALL-RHEL8.md`](INSTALL-RHEL8.md) instead.)
+box. (On RHEL 8, 9 or 10, use [`INSTALL-RHEL.md`](INSTALL-RHEL.md) instead.)
 
 If you later add a second or third physical nameserver, see
 [Scaling beyond one server](#scaling-beyond-one-server) at the end — you
@@ -58,7 +58,7 @@ later without changing how the app itself works.
 
 | Requirement | Notes |
 |---|---|
-| A Debian 12 / Ubuntu 22.04+ VM with a static IP | On RHEL 8 use [`INSTALL-RHEL8.md`](INSTALL-RHEL8.md) — package names, paths, SELinux and the agent's Python version all differ |
+| A Debian 12 / Ubuntu 22.04+ VM with a static IP | On RHEL 8, 9 or 10 use [`INSTALL-RHEL.md`](INSTALL-RHEL.md) — package names, paths, SELinux and the agent's Python version all differ |
 | Docker + Docker Compose | For the BindManager app stack |
 | Root or sudo access | To install MariaDB/Redis and manage systemd units |
 | No existing zone data to migrate | If you *do* have zones from another system, import them via the Django admin or API after this guide — not covered here |
@@ -446,7 +446,7 @@ VM's real address, not `localhost`). Three ways to do that, depending on
 what the new box looks like:
 
 - **Bare metal with BIND9 already there** — same as Part 4 above.
-- **RHEL 8 box** — [`INSTALL-NAMESERVER-RHEL8.md`](INSTALL-NAMESERVER-RHEL8.md) (BIND, SELinux, firewalld, Python 3.9 for the agent).
+- **RHEL 8, 9 or 10 box** — [`INSTALL-NAMESERVER-RHEL.md`](INSTALL-NAMESERVER-RHEL.md) (BIND, SELinux, firewalld, the agent's Python on RHEL 8).
 - **Fresh box, nothing installed yet** — [`docker/bind9-node/README.md`](docker/bind9-node/README.md) bakes BIND9 + the agent into one container.
 - **BIND9 already there, but you want the agent containerized anyway** — [`docker/bind9-agent/README.md`](docker/bind9-agent/README.md).
 

@@ -91,7 +91,7 @@ The defaults above are Debian/Ubuntu paths. On RHEL the equivalents are
 enforcing, a container writing into `/var/named` is denied unless you
 relabel those paths for container access, which in turn stops `named`
 from reading them. On RHEL, run the agent on bare metal instead
-([`INSTALL-NAMESERVER-RHEL8.md`](../../INSTALL-NAMESERVER-RHEL8.md)) — it needs nothing extra.
+([`INSTALL-NAMESERVER-RHEL.md`](../../INSTALL-NAMESERVER-RHEL.md)) — it needs nothing extra.
 
 ## Updating
 

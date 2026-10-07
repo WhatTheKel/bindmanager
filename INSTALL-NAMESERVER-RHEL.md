@@ -1,14 +1,16 @@
-# BindManager — Adding a RHEL 8 Nameserver
+# BindManager — Adding a RHEL Nameserver (RHEL 8, 9 and 10)
 
-This runbook turns a **fresh RHEL 8 VM (no BIND installed yet)** into an
+This runbook turns a **fresh RHEL 8, 9 or 10 VM (no BIND installed yet)** into an
 authoritative nameserver managed by an existing BindManager deployment.
 It is the RHEL equivalent of [`INSTALL-DEBIAN.md`](INSTALL-DEBIAN.md) Part 4, which
-assumes Debian/Ubuntu.
+assumes Debian/Ubuntu. Almost every step is the same on all three
+releases; where one differs, the step says so (summary in
+[RHEL 8 vs 9 vs 10](#rhel-8-vs-9-vs-10)).
 
 The BindManager app itself is **not** installed here — it runs once,
-elsewhere (see [`INSTALL-RHEL8.md`](INSTALL-RHEL8.md) or
+elsewhere (see [`INSTALL-RHEL.md`](INSTALL-RHEL.md) or
 [`INSTALL-DEBIAN.md`](INSTALL-DEBIAN.md) Parts 1–3). Want the app *and*
-BIND on this same RHEL 8 box? Use [`INSTALL-RHEL8.md`](INSTALL-RHEL8.md)
+BIND on this same RHEL box? Use [`INSTALL-RHEL.md`](INSTALL-RHEL.md)
 instead. This VM only gets:
 
 - BIND (`named`), answering DNS on port 53
@@ -17,7 +19,7 @@ instead. This VM only gets:
   the REST API, validates them, writes them and reloads `named`
 
 ```
- BindManager app (existing)            This RHEL 8 VM
+ BindManager app (existing)            This RHEL VM
  ┌──────────────────────┐   HTTP :81   ┌─────────────────────────────┐
  │ web / worker / beat  │◄─────────────│ bindmanager-agent (timer)   │
  │ REST API /api/v1     │  API key     │   writes /var/named/...     │
@@ -26,18 +28,37 @@ instead. This VM only gets:
                                        └─────────────────────────────┘
 ```
 
-## How RHEL 8 differs from the Debian guide
+## How RHEL differs from the Debian guide
 
-| | Debian/Ubuntu (`INSTALL-DEBIAN.md`) | RHEL 8 (this guide) |
+| | Debian/Ubuntu (`INSTALL-DEBIAN.md`) | RHEL (this guide) |
 |---|---|---|
 | Packages | `bind9 bind9-utils bind9-dnsutils` | `bind bind-utils` |
 | Service | `bind9` | `named` |
 | Main config | `/etc/bind/named.conf` | `/etc/named.conf` |
 | Zones directory | `/etc/bind/zones` | `/var/named/bindmanager` |
 | Agent include file | `/etc/bind/named.bindmanager.conf` | `/etc/named/bindmanager.conf` |
-| Python for the agent | system `python3` | **`python3.9`** — the default `python3` (3.6) is too old |
+| Python for the agent | system `python3` | RHEL 9/10: system `python3`. **RHEL 8: `python3.9`** — the default `python3` (3.6) is too old |
 | Firewall | `ufw` | `firewalld` |
 | MAC | usually none | **SELinux enforcing** — paths above are chosen so the default policy works |
+
+## RHEL 8 vs 9 vs 10
+
+Only the agent's Python differs; BIND, SELinux, firewalld and every path
+in this guide are the same on all three.
+
+| | RHEL 8 | RHEL 9 | RHEL 10 |
+|---|---|---|---|
+| BIND shipped | 9.11 | 9.16 | 9.18 |
+| Default `python3` | 3.6 — **too old** | 3.9 | 3.12 |
+| Agent's Python | install `python39`, run it with `/usr/bin/python3.9` (Part 1, 4.2) | system `/usr/bin/python3` — no change | system `/usr/bin/python3` — no change |
+| Hardware | — | — | CPU must support **x86-64-v3** — on a VM, use host-passthrough or a recent CPU model |
+
+Check which one you have with `cat /etc/redhat-release`.
+
+> **Tested:** this guide has been run end to end against live RHEL 8
+> nameservers. The RHEL 9 and 10 steps follow those releases' packaging
+> (the agent only needs the standard library, Python 3.8+) but haven't
+> been run end to end yet — if something differs, please open an issue.
 
 ---
 
@@ -45,7 +66,7 @@ instead. This VM only gets:
 
 | Requirement | Notes |
 |---|---|
-| RHEL 8 VM with a static IP | Registered/subscribed so `dnf` can reach BaseOS + AppStream |
+| RHEL 8, 9 or 10 VM with a static IP | Registered/subscribed so `dnf` can reach BaseOS + AppStream |
 | Root or sudo access | |
 | A running BindManager deployment | With the Celery Beat sync task configured (`INSTALL-DEBIAN.md` Part 3) — see [the sync checkpoint](#before-you-start-confirm-the-app-is-syncing) |
 | Network path VM → app | TCP 81 (or whatever fronts the app) from this VM to the BindManager host |
@@ -74,15 +95,18 @@ Troubleshooting table.
 ## Part 1 — Install packages
 
 ```bash
-dnf install -y bind bind-utils python39
+dnf install -y bind bind-utils
+dnf install -y python39            # RHEL 8 only — skip on RHEL 9 and 10
 ```
 
 - `bind` — `named`, `rndc`, `named-checkzone`, `named-checkconf`
 - `bind-utils` — `dig`, for testing
-- `python39` — the agent uses Python 3.8+ features
+- `python39` (**RHEL 8 only**) — the agent uses Python 3.8+ features
   (`from __future__ import annotations`, `Path.unlink(missing_ok=...)`),
   so RHEL 8's default Python 3.6 crashes on startup. `python39` installs
   `/usr/bin/python3.9` alongside it; nothing else on the system changes.
+  RHEL 9 (3.9) and RHEL 10 (3.12) already ship a new enough `python3`;
+  there is no `python39` package on them, so that line would fail.
 
 ---
 
@@ -216,7 +240,7 @@ mkdir -p /opt/bindmanager-agent /etc/bindmanager-agent
 \cp -f agents/config.example.ini /etc/bindmanager-agent/config.ini
 \cp -f agents/systemd/bindmanager-agent.{service,timer} /etc/systemd/system/
 
-# Run the agent with Python 3.9, not the system 3.6
+# RHEL 8 ONLY: run the agent with Python 3.9, not the system 3.6
 sed -i 's|/usr/bin/python3 |/usr/bin/python3.9 |' /etc/systemd/system/bindmanager-agent.service
 
 chmod 600 /etc/bindmanager-agent/config.ini   # it holds a bearer credential
@@ -224,6 +248,11 @@ chmod 600 /etc/bindmanager-agent/config.ini   # it holds a bearer credential
 
 (The leading `\` skips RHEL root's `cp -i` alias, so re-running doesn't stop
 to ask about overwriting.)
+
+> **RHEL 9 and 10: skip the `sed` line.** The shipped unit already runs
+> `/usr/bin/python3`, which is new enough. On RHEL 10 there is no
+> `python3.9` at all, so after that `sed` the agent never runs
+> (`status=203/EXEC` in `systemctl status bindmanager-agent`).
 
 ### 4.3 Configure it
 
@@ -256,7 +285,7 @@ grep -n '/etc/bind/' /etc/bindmanager-agent/config.ini && echo "FIX THESE" || ec
 ```
 
 The remaining defaults (`rndc_bin`, `checkzone_bin`, `checkconf_bin`,
-`lock_file`, `manifest_file`, `timeout`) work as-is on RHEL 8.
+`lock_file`, `manifest_file`, `timeout`) work as-is on RHEL 8, 9 and 10.
 
 The shipped systemd unit already lists `After=... named.service`, and runs
 as root — which is what writing into `/var/named` and running `rndc` need.
@@ -269,8 +298,8 @@ Check connectivity and credentials without touching anything:
 
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' http://bindmanager.example.com:81/   # expect 200 or 302
-python3.9 /opt/bindmanager-agent/bindmanager_agent.py \
-  --config /etc/bindmanager-agent/config.ini --dry-run -v
+python3 /opt/bindmanager-agent/bindmanager_agent.py \
+  --config /etc/bindmanager-agent/config.ini --dry-run -v    # RHEL 8: python3.9
 ```
 
 With no zones assigned yet, success looks like:
@@ -388,7 +417,9 @@ agent/API issues that aren't OS-specific (401s, 404s, empty zone lists).
 |---|---|---|
 | Agent log: `FileNotFoundError: ... '/etc/bind/named.bindmanager.tmp'` (zone file *is* written, but `/etc/named/bindmanager.conf` stays empty, `dig` gives `REFUSED`) | `named_conf_include` still has the Debian default path | Part 4.3 `sed` block; then `systemctl start bindmanager-agent.service` — it recovers on its own, no cleanup needed |
 | Agent log: `FileNotFoundError` mentioning `/etc/bind/zones` | `zones_dir` still has the Debian default path | Same as above |
-| Agent fails immediately with `SyntaxError` / `TypeError` mentioning annotations, or `unlink() got an unexpected keyword argument` | Running under Python 3.6 | Confirm `ExecStart` uses `/usr/bin/python3.9`; `systemctl daemon-reload` |
+| Agent fails immediately with `SyntaxError` / `TypeError` mentioning annotations, or `unlink() got an unexpected keyword argument` | RHEL 8, running under Python 3.6 | Confirm `ExecStart` uses `/usr/bin/python3.9`; `systemctl daemon-reload` |
+| Agent never runs; `systemctl status bindmanager-agent` shows `status=203/EXEC` | RHEL 9/10 with the RHEL 8 `python3.9` `sed` applied (RHEL 10 has no `python3.9`) | Change `ExecStart` back to `/usr/bin/python3`; `systemctl daemon-reload` |
+| `dnf install python39` fails: `No match for argument` | RHEL 9 or 10 — the package only exists on RHEL 8 | Skip it; the system `python3` is new enough |
 | `dig` returns `REFUSED` and named logs `query (cache) ... denied` | Zone not loaded (see above) | Check `journalctl -u bindmanager-agent.service`, `cat /etc/named/bindmanager.conf` |
 | `dig @localhost` works, remote `dig` returns `REFUSED` | `allow-query` still `localhost` | Part 2, then `rndc reconfig` |
 | `dig @localhost` works, remote `dig` times out | Firewall closed, or `listen-on` still `127.0.0.1` | Part 2 firewall step; `ss -lunp \| grep :53` should show the VM's IP |
@@ -408,8 +439,8 @@ To see whether this server's agent needs updating, open **Manage →
 Nameservers** in the app: the *Agent* column shows the version it last
 reported, marked **Outdated** (or **Unknown** for agents from
 before 0.2.4) when the app ships a newer one. On this VM,
-`python3.9 /opt/bindmanager-agent/bindmanager_agent.py --version` prints
-it. Only when it needs updating:
+`python3 /opt/bindmanager-agent/bindmanager_agent.py --version` (RHEL 8:
+`python3.9`) prints it. Only when it needs updating:
 
 ```bash
 cd /root/bindmanager && git pull
@@ -419,7 +450,7 @@ cd /root/bindmanager && git pull
 The script backs up the old agent, installs the new one, checks it against
 the app (restoring the old one if that fails) and runs it once, so the app
 shows the new version straight away. If it says the systemd unit files
-changed, re-copy them and **re-run the `python3.9` sed from 4.2**. Full
+changed, re-copy them and, **on RHEL 8 only**, re-run the `python3.9` sed from 4.2. Full
 details, including updating without git: [`UPDATING.md`](UPDATING.md) Part 2.
 
 ---

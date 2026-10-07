@@ -29,11 +29,11 @@ only the zones assigned to it, validating, and reloading locally.
    `api_url` and `api_key`, `chmod 600` it. The example's `zones_dir` and
    `named_conf_include` are **Debian/Ubuntu** paths (`/etc/bind/...`) — on
    RHEL use `/var/named/bindmanager` and `/etc/named/bindmanager.conf`
-   instead (see [`INSTALL-NAMESERVER-RHEL8.md`](../INSTALL-NAMESERVER-RHEL8.md) Part 4.3). A wrong
+   instead (see [`INSTALL-NAMESERVER-RHEL.md`](../INSTALL-NAMESERVER-RHEL.md) Part 4.3). A wrong
    `named_conf_include` makes the agent write zone files and then crash
    before BIND is told about them.
    Needs Python 3.8+ — on RHEL 8 install `python39` and point the unit's
-   `ExecStart` at `/usr/bin/python3.9`.
+   `ExecStart` at `/usr/bin/python3.9` (RHEL 9 and 10: the system `python3` is fine, change nothing).
 4. If using `named_conf_include`, add one line to `named.conf`:
    ```
    include "/etc/bind/named.bindmanager.conf";

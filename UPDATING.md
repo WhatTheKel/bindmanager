@@ -14,9 +14,9 @@ Your own settings and data are never in git, so an update leaves them alone:
 contents.
 
 Paths below use `/opt/bindmanager` for the app checkout (as in
-[`INSTALL-RHEL8.md`](INSTALL-RHEL8.md)) and `/root/bindmanager` for a
+[`INSTALL-RHEL.md`](INSTALL-RHEL.md)) and `/root/bindmanager` for a
 nameserver's checkout (as in
-[`INSTALL-NAMESERVER-RHEL8.md`](INSTALL-NAMESERVER-RHEL8.md)). Use wherever
+[`INSTALL-NAMESERVER-RHEL.md`](INSTALL-NAMESERVER-RHEL.md)). Use wherever
 you actually cloned it.
 
 ---
@@ -193,8 +193,8 @@ run (within 2 minutes) uses the new version.
 Check it by hand if you like:
 
 ```bash
-python3.9 /opt/bindmanager-agent/bindmanager_agent.py --version  # Debian: python3
-python3.9 /opt/bindmanager-agent/bindmanager_agent.py \
+python3 /opt/bindmanager-agent/bindmanager_agent.py --version    # RHEL 8: python3.9
+python3 /opt/bindmanager-agent/bindmanager_agent.py \
   --config /etc/bindmanager-agent/config.ini --dry-run -v
 journalctl -u bindmanager-agent --since '-5 min'
 ```
@@ -234,7 +234,7 @@ seconds. With more than one nameserver, update them one at a time.
 ### 2.4 Single-server installs
 
 If the app and BIND are on the same machine
-([`INSTALL-RHEL8.md`](INSTALL-RHEL8.md) or
+([`INSTALL-RHEL.md`](INSTALL-RHEL.md) or
 [`INSTALL-DEBIAN.md`](INSTALL-DEBIAN.md)), the agent was installed from the
 same checkout. Part 1's `git pull` already fetched the new agent; just run
 `./agents/update-agent.sh` in `/opt/bindmanager` (it pulls again, harmlessly).
