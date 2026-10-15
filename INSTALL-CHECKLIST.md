@@ -19,7 +19,7 @@ Fill these in once, then substitute them below:
 
 ## A. App host — once
 
-Assumes MariaDB, Redis and Docker are installed and `.env` is filled in
+Assumes MariaDB and Docker are installed (Redis comes with the Docker stack) and `.env` is filled in
 (Parts 1–2 of `INSTALL-RHEL.md` or `INSTALL-DEBIAN.md`).
 
 ```bash

@@ -40,7 +40,7 @@ new versions later, follow `UPDATING.md`.
 | Auth | Django session auth + SSO (Okta / Authentik); API: personal API tokens, JWT (SimpleJWT) or session |
 | Database | MySQL 8.0 / MariaDB 10.11 **or** PostgreSQL 16 (selectable via `DB_ENGINE` in `.env`) |
 | DB driver | `mysqlclient` (MySQL/MariaDB) or `psycopg2-binary` (PostgreSQL) |
-| Cache / Broker | Redis 7+ (external, not containerised) |
+| Cache / Broker | Redis 7.4 — the `redis` service in `docker-compose.yml` (nothing to install on the host) |
 | Background Tasks | Celery + Celery Beat (schedule stored in the DB via `django-celery-beat`, not hardcoded — see [DNS Zone Sync](#dns-zone-sync)) |
 | Frontend | Custom CSS (CSS variables, light/dark tokens) + vanilla JS + GSAP (vendored, no CDN) |
 | Web Server | Nginx (port 81) → Gunicorn |
@@ -53,7 +53,6 @@ new versions later, follow `UPDATING.md`.
 
 - Docker and Docker Compose installed on the VM
 - A running **MySQL 8.0** / **MariaDB 10.11** or **PostgreSQL 16** instance reachable from the VM
-- A running **Redis 7+** instance reachable from the VM
 - BIND9 installed on the target nameserver(s) with `rndc` access
 
 ---
@@ -134,10 +133,9 @@ CSRF_TRUSTED_ORIGINS=http://<your-server-ip>:81
 # or replace with the actual IP if MySQL is on a separate machine
 DB_HOST=host.docker.internal
 DB_PASSWORD=<your-mysql-password>
-
-# Redis — include password in the URL if Redis is password-protected
-REDIS_URL=redis://:<redis-password>@host.docker.internal:6379/0
 ```
+
+Redis needs no settings: the stack runs its own `redis` service.
 
 See `.env.example` for the full list of options including SSO and branding configuration.
 
@@ -348,6 +346,7 @@ bindmanager/
 | Service | Role |
 |---|---|
 | `bind` | Hidden BIND primary — answers no DNS queries; exists only so the `worker`'s `rndc reload` has a real `named` to talk to (see [DNS Zone Sync](#dns-zone-sync)) |
+| `redis` | Celery broker and the cache behind the login lockout and API rate limits. Only reachable inside the stack's Docker network (no host port), no persistence — queued syncs are re-dispatched by beat. `web`, `worker` and `beat` get `REDIS_URL=redis://redis:6379/0` from the compose file, which overrides any `REDIS_URL` in `.env` |
 | `web` | Gunicorn app server — runs migrations and collectstatic on startup |
 | `worker` | Celery worker — processes the `zone_sync` queue |
 | `beat` | Celery Beat — schedules periodic zone sync |
@@ -738,7 +737,7 @@ docker compose down -v
 
 ## Networking Notes
 
-Containers use `host.docker.internal` (mapped via `extra_hosts: host-gateway`) to reach services on the VM host. If MySQL or Redis runs on a **separate machine**, replace `host.docker.internal` in `.env` with that machine's IP.
+Containers use `host.docker.internal` (mapped via `extra_hosts: host-gateway`) to reach services on the VM host. If MySQL runs on a **separate machine**, replace `host.docker.internal` in `.env` with that machine's IP.
 
 To confirm MySQL grants allow Docker connections:
 

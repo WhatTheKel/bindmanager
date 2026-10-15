@@ -101,6 +101,14 @@ Commented-out settings in `.env.example` (e.g. `# TRUSTED_PROXY_COUNT=1`)
 are optional with safe defaults, so the command above doesn't list them.
 Skim the diff of `.env.example` from 0.1 for any you might need.
 
+> **Upgrading from 0.2.10 or older — Redis is now part of the stack.**
+> `docker-compose.yml` runs its own `redis` service and points `web`,
+> `worker` and `beat` at it, overriding `REDIS_URL` in `.env`. Nothing to
+> do: 1.3's `up -d` starts it. Afterwards you can delete `REDIS_URL` and
+> `REDIS_PASSWORD` from `.env`, and remove the host's Redis/Valkey if
+> nothing else uses it. Queued tasks and lockout counters in the old Redis
+> aren't carried over; beat re-dispatches dirty zones within a minute.
+
 ### 1.3 Rebuild and restart
 
 ```bash

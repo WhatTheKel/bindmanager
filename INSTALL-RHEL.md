@@ -23,8 +23,8 @@ instead — this guide's Parts 0 and 4–5 are that guide pointed at `localhost`
  │        ▼                                                         │
  │  named (Part 0) ── answers DNS on :53 ◄───────────── resolvers   │
  │                                                                  │
- │  MariaDB + Redis/Valkey (Part 1) — native services,              │
- │  reached by the containers via host.docker.internal              │
+ │  MariaDB (Part 1) — native service, reached by the containers    │
+ │  via host.docker.internal; Redis runs in the Docker stack        │
  └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -60,7 +60,6 @@ on all three. What differs is packaging:
 |---|---|---|---|
 | BIND shipped | 9.11 | 9.16 | 9.18 |
 | MariaDB (Django 5.2 needs ≥ 10.5) | module stream — **enable `mariadb:10.5`** or newer; the default 10.3 is too old | default package (10.5) — no module step | default package (10.11) — no module step |
-| Redis | module stream `redis:6` | default package (6.2); `redis:7` stream if your minor release lists it | **Valkey** replaces Redis — package/service `valkey` |
 | Agent's Python | install `python39`, run it with `/usr/bin/python3.9` | system `python3` (3.9) | system `python3` (3.12) |
 | `dnf module` | yes | yes | **no module streams at all** |
 
@@ -112,10 +111,10 @@ Why each setting, and why these exact paths satisfy SELinux:
 
 ---
 
-## Part 1 — MariaDB and Redis
+## Part 1 — MariaDB (and Redis)
 
-Both run as normal host services (not containers), so your data lives
-outside Docker's lifecycle.
+MariaDB runs as a normal host service (not a container), so your data
+lives outside Docker's lifecycle.
 
 ### 1.1 MariaDB
 
@@ -140,43 +139,12 @@ it via `host.docker.internal`. It stays private because firewalld's
 bridge networks in firewalld's `docker` zone, which accepts traffic from
 containers to the host.
 
-### 1.2 Redis (Valkey on RHEL 10)
+### 1.2 Redis
 
-**RHEL 8 and 9:**
-
-```bash
-dnf module enable -y redis:6                # RHEL 8 only (RHEL 9: skip, or enable redis:7 if `dnf module list redis` shows it)
-dnf install -y redis
-sed -i 's/^bind .*/bind 0.0.0.0/' /etc/redis.conf
-sed -i "s/^# requirepass .*/requirepass $(openssl rand -hex 24)/" /etc/redis.conf
-grep '^requirepass' /etc/redis.conf         # copy this value for .env in Part 2
-systemctl enable --now redis
-```
-
-If `/etc/redis.conf` doesn't exist, your build keeps it at
-`/etc/redis/redis.conf` — use that path in the three commands above.
-
-**RHEL 10** ships **Valkey**, the open-source fork of Redis, instead of
-Redis. It speaks the same protocol, so the app and Celery use it
-unchanged — `REDIS_URL` stays `redis://...`:
-
-```bash
-dnf install -y valkey
-sed -i 's/^bind .*/bind 0.0.0.0/' /etc/valkey/valkey.conf
-sed -i "s/^# requirepass .*/requirepass $(openssl rand -hex 24)/" /etc/valkey/valkey.conf
-grep '^requirepass' /etc/valkey/valkey.conf # copy this value for .env in Part 2
-systemctl enable --now valkey
-```
-
-As with MariaDB, don't open 6379 in firewalld's `public` zone.
-
-> **Redis version:** RHEL 8's AppStream stops at Redis 6 (RHEL 9's default
-> is 6.2), while the README lists Redis 7+. Celery only uses basic list and
-> pub/sub commands that Redis 6 has, but this combination hasn't been
-> tested with this release — if you want to match the README exactly,
-> install Redis 7 from the [Remi repository](https://rpms.remirepo.net/)
-> (or a `redis:7` module stream, where your release has one) instead; the
-> rest of this section is unchanged.
+Nothing to install. Redis runs as the `redis` service in
+`docker-compose.yml`, alongside the app, and `web`, `worker` and `beat`
+are pointed at it there. It has no host port, so it can't clash with
+another Redis on this machine and needs no password or firewall rule.
 
 > **PostgreSQL instead of MariaDB?** On RHEL 8/9 pick a stream with
 > `dnf module list postgresql` (13 or newer; RHEL 9's default is 13); on
@@ -240,11 +208,9 @@ CSRF_TRUSTED_ORIGINS=http://<this-vm-ip-or-hostname>:81
 
 DB_HOST=host.docker.internal
 DB_PASSWORD=<the password from 2.2>
-
-REDIS_URL=redis://:<the requirepass value from 1.2>@host.docker.internal:6379/0
 ```
 
-(On RHEL 10 this points at Valkey — the `redis://` scheme is correct.)
+No `REDIS_URL`: the stack's own `redis` service is used.
 
 ### 2.4 Build and start
 
@@ -378,8 +344,9 @@ App-side problems specific to a RHEL host:
 | `dnf install docker-ce` fails with conflicts on `runc`/`containers-common` | Podman packages still installed | `dnf remove -y podman buildah runc`, then retry |
 | `web` crash-loops; logs mention MariaDB version or unsupported features | MariaDB 10.3 (RHEL 8 default stream) — Django 5.2 needs 10.5+ | Back up, `dnf module reset mariadb`, enable a newer stream, `dnf distro-sync mariadb-server` |
 | `dnf module enable ...` fails: `No matching Modules to list` / `Problems in request` | RHEL 9 (no such stream) or RHEL 10 (no modules at all) | Skip the module step — the default package is new enough (1.1, 1.2) |
-| `dnf install python39` or `dnf install redis` fails: `No match for argument` | `python39` is RHEL 8 only; RHEL 10 ships Valkey instead of Redis | RHEL 9/10: skip `python39`. RHEL 10: install `valkey` (1.2) |
-| `web`/`worker` can't reach MariaDB or Redis (`Connection refused` / timed out to `host.docker.internal`) | Redis/Valkey still bound to `127.0.0.1`, or the service isn't running | `ss -ltn \| grep -E '3306\|6379'` should show `0.0.0.0`; `firewall-cmd --get-active-zones` should list the Docker bridges in zone `docker` |
+| `dnf install python39` fails: `No match for argument` | `python39` is RHEL 8 only | RHEL 9/10: skip `python39` |
+| `web`/`worker` can't reach MariaDB (`Connection refused` / timed out to `host.docker.internal`) | MariaDB bound to `127.0.0.1`, or not running | `ss -ltn \| grep 3306` should show `0.0.0.0`; `firewall-cmd --get-active-zones` should list the Docker bridges in zone `docker` |
+| Worker logs `Cannot connect to redis://redis:6379` | The stack's `redis` service isn't running | `docker compose ps redis` should show `healthy`; `docker compose up -d` |
 | Containers log `Permission denied` on `./bind_zones`, `./staticfiles` or `./branding` | Docker's SELinux support was turned on (`"selinux-enabled": true` in `/etc/docker/daemon.json`) so bind mounts need labels | `chcon -Rt container_file_t bind_zones staticfiles branding`, or turn that option back off |
 | Zone stays `is_dirty=True` | No sync schedule (Part 3), or a record fails `named-checkzone` | `docker compose logs worker \| grep -A3 checkzone` shows the reason |
 | Login page unreachable from your browser | Port 81 closed | Part 2.4 firewall step |
@@ -390,8 +357,7 @@ App-side problems specific to a RHEL host:
 
 - [ ] Changed the default `bindmanager` DB password (MariaDB **and** `.env`)
 - [ ] Generated a real `DJANGO_SECRET_KEY`
-- [ ] Redis (Valkey on RHEL 10) has a `requirepass`, and `REDIS_URL` includes it
-- [ ] Ports 3306 and 6379 are **not** open in firewalld's `public` zone
+- [ ] Port 3306 is **not** open in firewalld's `public` zone
       (`firewall-cmd --list-all`)
 - [ ] `recursion no;` in `/etc/named.conf`
 - [ ] SELinux still enforcing (`getenforce`)

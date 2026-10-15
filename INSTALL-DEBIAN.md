@@ -24,12 +24,13 @@ don't need to plan for that now, and nothing in this guide has to be redone.
                     │                                │
                     │  Docker Compose:               │
                     │   nginx · web · worker · beat  │
+                    │   · redis                      │
                     │   + a hidden "bind" container  │──┐
                     │     (never answers DNS —       │  │ rndc reload
                     │      see note below)           │◄─┘ (Docker-internal only)
                     │                                │
                     │  Native OS packages:           │
-                    │   MariaDB · Redis               │
+                    │   MariaDB                      │
                     │                                │
                     │  Native OS services:            │
                     │   BIND9 (Part 0)            ◄──────── pull agent (systemd
@@ -60,7 +61,7 @@ later without changing how the app itself works.
 |---|---|
 | A Debian 12 / Ubuntu 22.04+ VM with a static IP | On RHEL 8, 9 or 10 use [`INSTALL-RHEL.md`](INSTALL-RHEL.md) — package names, paths, SELinux and the agent's Python version all differ |
 | Docker + Docker Compose | For the BindManager app stack |
-| Root or sudo access | To install MariaDB/Redis and manage systemd units |
+| Root or sudo access | To install MariaDB and manage systemd units |
 | No existing zone data to migrate | If you *do* have zones from another system, import them via the Django admin or API after this guide — not covered here |
 
 ---
@@ -109,11 +110,11 @@ BIND is added in Part 4.2.
 
 ---
 
-## Part 1 — Install the database and cache on this VM
+## Part 1 — Install the database on this VM
 
-BindManager expects MySQL/MariaDB (or PostgreSQL) and Redis as regular
-services, not containers — this keeps your data outside Docker's
-lifecycle. We'll install both directly on the VM.
+BindManager expects MySQL/MariaDB (or PostgreSQL) as a regular service,
+not a container — this keeps your data outside Docker's lifecycle. Redis
+is part of the Docker stack (1.2).
 
 ### 1.1 MariaDB
 
@@ -142,22 +143,10 @@ ufw deny 3306
 
 ### 1.2 Redis
 
-```bash
-apt install -y redis-server
-```
-
-Same reachability problem, plus Redis ships with no password by default —
-set one:
-
-```bash
-sed -i "s/^bind .*/bind 0.0.0.0/" /etc/redis/redis.conf
-sed -i "s/^# requirepass.*/requirepass $(openssl rand -hex 24)/" /etc/redis/redis.conf
-grep '^requirepass' /etc/redis/redis.conf   # copy this value for .env in Part 2
-systemctl restart redis-server
-
-ufw allow from 172.16.0.0/12 to any port 6379 proto tcp
-ufw deny 6379
-```
+Nothing to install. Redis runs as the `redis` service in
+`docker-compose.yml`, alongside the app, and `web`, `worker` and `beat`
+are pointed at it there. It has no host port, so it can't clash with
+another Redis on this machine and needs no password or firewall rule.
 
 > **Using PostgreSQL instead?** `apt install postgresql`, then set
 > `DB_ENGINE=postgresql` in `.env` (Part 2.2). Initialize it as the
@@ -205,9 +194,9 @@ CSRF_TRUSTED_ORIGINS=http://<this-vm-ip-or-hostname>:81
 
 DB_HOST=host.docker.internal
 DB_PASSWORD=<a real password — also update it in MariaDB: ALTER USER 'bindmanager'@'%' IDENTIFIED BY '...'>
-
-REDIS_URL=redis://:<the requirepass value from Part 1.2>@host.docker.internal:6379/0
 ```
+
+No `REDIS_URL`: the stack's own `redis` service is used.
 
 ### 2.3 Build and start
 
@@ -403,7 +392,8 @@ If all of that resolves, the full pipeline — UI → database → Celery sync
 | Zone stays `is_dirty=True` indefinitely | No Celery Beat periodic task created (Part 3), or it's disabled | Check `/admin/django_celery_beat/periodictask/`; check `docker compose logs beat` for the "Sending due task" line |
 | Zone stays `is_dirty=True`, worker logs `named-checkzone failed for <zone>` | A record in the zone makes it invalid | The lines after that message give `named-checkzone`'s reason; fix that record in the UI and the next sync picks it up |
 | `docker compose exec worker rndc status` fails | Hidden `bind` container unhealthy | `docker compose logs bind`; `docker compose ps` should show it `healthy` |
-| `web`/`worker` can't reach MariaDB/Redis | Service still bound to `127.0.0.1` only | Re-check Part 1.1 / 1.2's `bind-address` edits; `systemctl restart mariadb redis-server` after changing |
+| `web`/`worker` can't reach MariaDB | Still bound to `127.0.0.1` only | Re-check Part 1.1's `bind-address` edit; `systemctl restart mariadb` after changing |
+| Worker logs `Cannot connect to redis://redis:6379` | The stack's `redis` service isn't running | `docker compose ps redis` should show `healthy`; `docker compose up -d` |
 | Zone `"has no address records"` in `docker compose logs bind` | An in-bailiwick NS record (e.g. `ns1.<zone>`) has no matching A/AAAA record in the same zone | Add the missing glue record |
 | Agent's `--dry-run` shows an empty zone list forever | Zone hasn't passed its first sync yet (Celery not running, or a record fails `named-checkzone`), or the NameServer row has no zones assigned, or `is_active=False` | Check Manage → Zones assignment; confirm Part 3's checkpoint passed |
 | Agent gets HTTP 401 | Wrong API key in `config.ini`, or it was regenerated since | Regenerate the key in Manage → Nameservers and put the new one in `config.ini` |
@@ -417,8 +407,7 @@ If all of that resolves, the full pipeline — UI → database → Celery sync
 
 - [ ] Changed the default `bindmanager` DB password (MariaDB **and** `.env`)
 - [ ] Generated a real `DJANGO_SECRET_KEY`
-- [ ] Set a Redis password and confirmed `REDIS_URL` includes it
-- [ ] Firewalled MariaDB (3306) and Redis (6379) to Docker's subnet only — not `0.0.0.0/0`
+- [ ] Firewalled MariaDB (3306) to Docker's subnet only — not `0.0.0.0/0`
 - [ ] `chmod 600` on `/etc/bindmanager-agent/config.ini` (it's an API key)
 - [ ] TLS terminated in front of Nginx — this repo runs plain HTTP on :81 by default; put a reverse proxy or load balancer with a real cert in front for anything beyond a lab
 - [ ] Rotate the NameServer's API key if it ever leaks: **Manage → Nameservers** → **Regenerate** on the row, then update `config.ini` on that server (the old key stops working immediately)

@@ -18,16 +18,36 @@ services:
       retries: 24
       start_period: 10s
 
+  # Celery broker + the cache behind the login lockout and API rate limits.
+  # Part of the stack so the app needs no Redis on the host; only reachable
+  # on this project's own Docker network (no host port, nothing to clash
+  # with). Holds nothing that must survive a restart: queued syncs are
+  # re-dispatched by beat while zones stay dirty.
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: redis-server --save "" --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
   web:
     build: .
     restart: unless-stopped
     env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0   # the bundled redis service; overrides .env
     volumes:
       - ./bind_zones:/etc/bind/zones   # zone files written here
       - ./staticfiles:/app/staticfiles
       - ./branding:/app/branding:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_healthy
     command: >
       sh -c "python manage.py migrate --noinput &&
              python manage.py collectstatic --noinput &&
@@ -37,6 +57,8 @@ services:
     build: .
     restart: unless-stopped
     env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0   # the bundled redis service; overrides .env
     volumes:
       - ./bind_zones:/etc/bind/zones
       - ./bind_rndc:/etc/bind/rndc-shared:ro
@@ -45,14 +67,21 @@ services:
     depends_on:
       bind:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     command: celery -A config worker -l info -Q zone_sync -c 2
 
   beat:
     build: .
     restart: unless-stopped
     env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0   # the bundled redis service; overrides .env
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_healthy
     command: celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
 
   nginx:
