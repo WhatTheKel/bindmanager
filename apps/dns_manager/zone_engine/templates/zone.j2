@@ -18,8 +18,8 @@ $TTL {{ zone.default_ttl }}
 ; Zone Records
 {% for record in records %}
 {% if record.record_type in ('MX', 'SRV') %}
-{{ record.name }}{% if record.ttl %}  {{ record.ttl }}{% endif %}  IN  {{ record.record_type }}  {{ record.priority }}  {{ record.value }}
+{{ record.name }}{% if record.ttl is not none %}  {{ record.ttl }}{% endif %}  IN  {{ record.record_type }}  {{ record.priority }}  {{ record.value }}
 {% else %}
-{{ record.name }}{% if record.ttl %}  {{ record.ttl }}{% endif %}  IN  {{ record.record_type }}  {{ record.value }}
+{{ record.name }}{% if record.ttl is not none %}  {{ record.ttl }}{% endif %}  IN  {{ record.record_type }}  {{ record.value }}
 {% endif %}
 {% endfor %}

@@ -62,7 +62,11 @@ def _log_sync(zone_pk: int, detail: str) -> None:
 
 @shared_task
 def sync_zone(zone_pk: int):
-    """Validate, write and load one zone, then publish it for the agents."""
+    """Validate, write and load one zone, then publish it for the agents.
+
+    Returns the audit message ("Synced zone …" / "Sync failed for …"), or
+    None if the zone is gone or another sync holds it.
+    """
     now = timezone.now()
     # Take the zone's sync lock atomically; if another sync holds it, leave
     # the zone to that one (it stays dirty if it changed meanwhile).
@@ -70,7 +74,7 @@ def sync_zone(zone_pk: int):
         Q(sync_lock_until__isnull=True) | Q(sync_lock_until__lt=now)
     ).update(sync_lock_until=now + SYNC_LOCK_TTL)
     if not got_lock:
-        return
+        return None
 
     try:
         zone = Zone.objects.prefetch_related('records', 'nameservers').get(pk=zone_pk)
@@ -80,8 +84,9 @@ def sync_zone(zone_pk: int):
             reload_zone(zone.name, new_serial)
         except Exception as exc:
             log.warning('sync of %s failed: %s', zone.name, exc)
-            _log_sync(zone_pk, f'Sync failed for {zone.name}: {exc}')
-            return
+            detail = f'Sync failed for {zone.name}: {exc}'
+            _log_sync(zone_pk, detail)
+            return detail
 
         published = dict(serial=new_serial, published_content=content,
                          published_serial=new_serial)
@@ -91,8 +96,10 @@ def sync_zone(zone_pk: int):
         unchanged = Zone.objects.filter(pk=zone_pk, updated_at=zone.updated_at)
         if not unchanged.update(is_dirty=False, **published):
             Zone.objects.filter(pk=zone_pk).update(**published)
-        _log_sync(zone_pk, f'Synced zone {zone.name} serial={new_serial}')
+        detail = f'Synced zone {zone.name} serial={new_serial}'
+        _log_sync(zone_pk, detail)
+        return detail
     except Zone.DoesNotExist:
-        return
+        return None
     finally:
         Zone.objects.filter(pk=zone_pk).update(sync_lock_until=None)

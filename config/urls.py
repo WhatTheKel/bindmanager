@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.contrib.auth.views import LogoutView
 from django.urls import path, include
 from apps.accounts import views as account_views
 from apps.accounts.views import SmartLoginView
@@ -15,7 +16,10 @@ urlpatterns = [
          name='revoke_api_token'),
     path('account/users/<int:user_id>/revoke-tokens/', account_views.revoke_user_tokens,
          name='revoke_user_tokens'),
-    path('accounts/', include('django.contrib.auth.urls')),
+    # Only login (above) and logout: the rest of django.contrib.auth.urls would
+    # expose password reset by email, which isn't set up (and SSO users have
+    # no local password to reset).
+    path('accounts/logout/', LogoutView.as_view(), name='logout'),
     path('api/', include('apps.api.urls')),
     path('', include('apps.dns_manager.urls')),
 ]

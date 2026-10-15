@@ -313,6 +313,7 @@ bindmanager/
 │   ├── test_api_tokens.py      # Personal API tokens: SSO use, roles, hash-only, expiry, revoke, show-once (26 tests)
 │   ├── test_e2e_fixes.py       # Live-test fixes: long TXT split, named load check (app + agent), CAA/host-name/CNAME-target rules, orphan PTRs (50 tests)
 │   ├── test_bug_sweep.py       # Re-sync on zone/NS changes, name/priority/SRV validation, sync lock + audit de-dup, central cleanup, agent partial failure (67 tests)
+│   ├── test_bug_sweep_2.py     # One-line values, inactive nameservers kept on zone edit, sync_zones publishes, TTL 0, no password-reset pages (15 tests)
 │   ├── test_generator.py       # Zone engine: _bump_serial, _quote_txt, build_zone, file layout (33 tests)
 │   ├── test_login_lockout.py   # Real client IP despite fake X-Forwarded-For; lockout before password; /api/token/ shares it (15 tests)
 │   ├── test_models.py          # Zone, Record, AuditLog, NameServer (12 tests)
@@ -381,9 +382,11 @@ If a sync fails, the zone stays *Pending Sync* and is retried on every scheduled
 
 - **Zone names** are lower-cased, lose a trailing dot and must be a valid domain name.
 - **Record names** are stored relative to the zone: `www`, `www.example.com` and `www.example.com.` all become `www` (`@` for the apex). Spaces, invalid characters and names outside the zone are rejected. `*` wildcards and `_` labels (`_dmarc`, `_sip._tcp`) are fine.
-- **Values:** `A`/`AAAA` must be real IPv4/IPv6 addresses; `NS`/`CNAME`/`PTR`/`MX` must be hostnames, not IPs. `SRV` values must be `weight port target`. `MX` and `SRV` need a priority. SOA records can't be added (the zone's settings generate the SOA).
+- **Values** must be on one line — line breaks, tabs and other control characters are rejected (a line break in a TXT value would make BIND reject the whole zone). Join a long TXT value such as a DKIM key into one line; it's split into 255-character strings for you. `A`/`AAAA` must be real IPv4/IPv6 addresses; `NS`/`CNAME`/`PTR`/`MX` must be hostnames, not IPs. `SRV` values must be `weight port target`. `MX` and `SRV` need a priority. SOA records can't be added (the zone's settings generate the SOA).
 - **Hostname targets** (CNAME/MX/NS/PTR/SRV): a name without a trailing dot is relative to the zone, so a target ending with the zone's own name gets the missing dot (`www.example.com` → `www.example.com.`); `www` is fine as is; any other dotted name without a dot (`www.other.org`) is rejected with a message, because it would silently become `www.other.org.example.com.`.
 - **Conflicts:** a CNAME at a name that has other records (or at the apex), any record at a name that is already a CNAME, and exact duplicates are rejected. Several `A`/`AAAA` records with the same name are fine — that's how a name returns multiple IPs. Inactive records are ignored by these checks, since they aren't written to the zone file.
+- **TTL:** leave it blank to use the zone's default TTL. `0` is a real TTL (don't cache) and is written as `0`.
+- **Nameservers on a zone:** *Add Zone* offers only active nameservers. *Edit Zone* also lists inactive ones the zone already has, marked *(inactive)*, so saving the form doesn't unassign a nameserver you've only switched off for a while.
 
 Everything else is still validated by `named-checkzone` at sync time.
 
@@ -394,17 +397,17 @@ Everything else is still validated by `named-checkzone` at sync time.
 - **Create a reverse zone from a subnet:** in *Add Zone*, leave the name blank and enter the subnet in *Subnet* — `192.0.2.0/24` becomes `2.0.192.in-addr.arpa`, `2001:db8::/32` becomes `8.b.d.0.1.0.0.2.ip6.arpa`, and the zone type and IP version are set for you. Reverse zones follow label boundaries, so IPv4 subnets must be `/8`, `/16` or `/24` and IPv6 prefixes a multiple of 4. The API takes the same thing as `"subnet"` on `POST /api/v1/zones/`.
 - **PTR with an A/AAAA record:** tick *Create or update the PTR record* when adding or editing an `A`/`AAAA` record (`"sync_ptr": true` in the API). The PTR goes into the most specific reverse zone that covers the address, pointing at the record's full name, with the same TTL. If the address already has one PTR it is updated; if it has several, they're left alone with a warning. When an edit changes the IP, this record's PTR at the old address is removed. If no reverse zone covers the address, one is created for its `/24` (IPv4) or `/64` (IPv6), served by the same nameservers as the record's zone; an existing wider reverse zone (e.g. a `/16`) is used instead when there is one. If the record's zone has no nameservers, the new reverse zone has none either and you're warned that it can't sync until you assign some. The record, its PTR and any new reverse zone are saved together: if one fails, none is saved. On the add form the type starts as `A`, so the checkbox shows straight away; the checkbox only appears for `A`/`AAAA` (and *Priority* only for `MX`/`SRV`). PTR changes are written to the audit log; the API response lists them under `"ptr"`.
 
-**Manual sync via CLI:**
+**Manual sync via CLI:** `sync_zones` runs the same `sync_zone` step as the scheduled sync — validate, write, reload, then publish to the nameserver agents — right away instead of on the next beat run. A zone that fails stays *Pending Sync*. Run it in the `worker` container: it's the one with the `rndc` key for the hidden primary.
 
 ```bash
 # Sync all dirty zones
-docker compose exec web python manage.py sync_zones
+docker compose exec worker python manage.py sync_zones
 
 # Force sync a specific zone (ignores dirty flag)
-docker compose exec web python manage.py sync_zones --zone example.com
+docker compose exec worker python manage.py sync_zones --zone example.com
 
 # Force sync all zones (ignores dirty flag)
-docker compose exec web python manage.py sync_zones --all
+docker compose exec worker python manage.py sync_zones --all
 ```
 
 ---
@@ -524,7 +527,7 @@ curl http://<host>:81/api/v1/zones/ \
 ## Running Tests
 
 ```bash
-# All tests (373 total)
+# All tests (438 total)
 pytest
 
 # One module
@@ -554,6 +557,7 @@ The following controls are active out of the box:
 | Audit log integrity | Append-only from application code; add/change/delete disabled in the Django admin |
 | API docs | `/api/v1/` requires `is_superuser=True` — staff-only users are redirected to login |
 | Personal API tokens | Only a SHA-256 hash is stored; shown once at creation; expire after at most `API_TOKEN_MAX_DAYS` (default 90); refused for deactivated users; revocable by the owner, or all at once by a superuser; create/revoke audited without the token |
+| No password reset by email | Only `/accounts/login/` and `/accounts/logout/` are routed — Django's password reset/change pages aren't exposed (no mail server is configured, and SSO users have no local password). A superuser sets local passwords in `/admin/` or with `manage.py changepassword` |
 | Dependency pinning | All packages pinned to exact versions in `requirements.txt` |
 | Least privilege | Container drops to a non-root `django` user at runtime via `gosu` |
 

@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import UserCreationForm
+from django.db.models import Q
 from .models import NameServer, Zone, Record
 from .ptr import reverse_zone_for_subnet
 from .validators import normalize_zone_name
@@ -55,6 +56,15 @@ class ZoneForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['name'].required = False   # may come from the subnet
+        if self.instance.pk:
+            # Keep inactive nameservers the zone already has among the
+            # choices, or saving the form would silently unassign them.
+            ns_field = self.fields['nameservers']
+            ns_field.queryset = (NameServer.objects
+                                 .filter(Q(is_active=True) | Q(zones=self.instance))
+                                 .distinct().order_by('name'))
+            ns_field.label_from_instance = (
+                lambda ns: ns.name if ns.is_active else f'{ns.name} (inactive)')
 
     def clean_name(self):
         name = self.cleaned_data.get('name')

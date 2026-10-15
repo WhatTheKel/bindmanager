@@ -26,6 +26,16 @@ def validate_record_value(record_type: str, value: str) -> None:
     """Raise ValidationError if `value` can't be valid for `record_type`."""
     value = (value or '').strip()
 
+    # A record is one line of the zone file. A line break inside a value
+    # (easy to paste into the textarea, e.g. a DKIM key copied across lines)
+    # makes BIND reject the whole zone, so nothing in it publishes any more.
+    if any(ord(c) < 32 or ord(c) == 127 for c in value):
+        raise ValidationError(
+            'The value must be on one line, with no tabs or line breaks. '
+            'For a long TXT value, join it into one line; it is split into '
+            '255-character strings automatically.'
+        )
+
     if record_type == 'A':
         try:
             ipaddress.IPv4Address(value)
