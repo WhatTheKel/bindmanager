@@ -557,7 +557,7 @@ The following controls are active out of the box:
 | API rate limiting | DRF throttling — 20/min anonymous, 300/min authenticated, 300/min per pull-agent key, applied to every REST endpoint |
 | Audit log integrity | Append-only from application code; add/change/delete disabled in the Django admin |
 | API docs | `/api/v1/` requires `is_superuser=True` — staff-only users are redirected to login |
-| Personal API tokens | Only a SHA-256 hash is stored; shown once at creation; expire after at most `API_TOKEN_MAX_DAYS` (default 90), except that a superuser may create one that never expires; refused for deactivated users; revocable by the owner, or all at once by a superuser; create/revoke audited without the token |
+| Personal API tokens | Only a SHA-256 hash is stored; shown once at creation; expire after at most `API_TOKEN_MAX_DAYS` (default 90), except that a superuser may create one that never expires (it stops working if they lose superuser); refused for deactivated users; revocable by the owner, or all at once by a superuser; create/revoke audited without the token |
 | No password reset by email | Only `/accounts/login/` and `/accounts/logout/` are routed — Django's password reset/change pages aren't exposed (no mail server is configured, and SSO users have no local password). A superuser sets local passwords in `/admin/` or with `manage.py changepassword` |
 | Dependency pinning | All packages pinned to exact versions in `requirements.txt` |
 | Least privilege | Container drops to a non-root `django` user at runtime via `gosu` |

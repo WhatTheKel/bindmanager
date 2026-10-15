@@ -33,9 +33,13 @@ def sso_user():
     return u
 
 
+def _in_30_days():
+    return timezone.now() + timedelta(days=30)
+
+
 class TestModel:
     def test_only_hash_stored(self, staff_user):
-        token, raw = ApiToken.create_for(staff_user, 'ci')
+        token, raw = ApiToken.create_for(staff_user, 'ci', _in_30_days())
         assert raw.startswith('bmt_') and len(raw) > 40
         row = ApiToken.objects.filter(pk=token.pk).values().get()
         assert raw not in str(row.values())
@@ -46,19 +50,19 @@ class TestModel:
 
 class TestApiAuth:
     def test_sso_user_can_use_api_with_token(self, sso_user, zone):
-        _, raw = ApiToken.create_for(sso_user, 'script')
+        _, raw = ApiToken.create_for(sso_user, 'script', _in_30_days())
         resp = _api(raw).get('/api/v1/zones/')
         assert resp.status_code == 200
         assert resp.json()['results'][0]['name'] == zone.name
 
     def test_token_has_owner_role_read_only_user(self, regular_user, zone):
-        _, raw = ApiToken.create_for(regular_user, 'read')
+        _, raw = ApiToken.create_for(regular_user, 'read', _in_30_days())
         c = _api(raw)
         assert c.get('/api/v1/zones/').status_code == 200
         assert c.post('/api/v1/zones/', {'name': 'x.example'}, format='json').status_code == 403
 
     def test_staff_token_can_write_and_audit_names_the_user(self, staff_user):
-        _, raw = ApiToken.create_for(staff_user, 'write')
+        _, raw = ApiToken.create_for(staff_user, 'write', _in_30_days())
         resp = _api(raw).post('/api/v1/zones/', {'name': 'new.example'}, format='json')
         assert resp.status_code == 201, resp.content
         assert Zone.objects.filter(name='new.example').exists()
@@ -76,13 +80,13 @@ class TestApiAuth:
         assert resp.status_code == 401 and 'expired' in resp.json()['detail']
 
     def test_deactivated_user_token_rejected(self, staff_user):
-        _, raw = ApiToken.create_for(staff_user, 'x')
+        _, raw = ApiToken.create_for(staff_user, 'x', _in_30_days())
         staff_user.is_active = False
         staff_user.save()
         assert _api(raw).get('/api/v1/zones/').status_code == 401
 
     def test_last_used_records_real_ip(self, staff_user):
-        token, raw = ApiToken.create_for(staff_user, 'x')
+        token, raw = ApiToken.create_for(staff_user, 'x', _in_30_days())
         _api(raw, xff='6.6.6.6, 198.51.100.7').get('/api/v1/zones/')
         token.refresh_from_db()
         assert token.last_used_at is not None and token.last_used_ip == '198.51.100.7'
@@ -128,6 +132,19 @@ class TestTokensPage:
         assert token.expires_at is None and not token.is_expired
         assert 'no expiry' in AuditLog.objects.get(entity_type='api_token').detail
 
+    def test_non_expiring_token_stops_when_superuser_demoted(self, settings):
+        settings.API_TOKEN_MAX_DAYS = 90
+        boss = User.objects.create_superuser('boss', 'b@example.com', 'x')
+        _, raw = ApiToken.create_for(boss, 'monitoring')
+        api = APIClient()
+        api.credentials(HTTP_AUTHORIZATION=f'Token {raw}')
+        assert api.get('/api/v1/zones/').status_code == 200
+        boss.is_superuser = False
+        boss.save()
+        assert api.get('/api/v1/zones/').status_code == 401
+        settings.API_TOKEN_MAX_DAYS = 0      # policy allows no expiry for all
+        assert api.get('/api/v1/zones/').status_code == 200
+
     def test_staff_cannot_create_non_expiring(self, client, staff_user, settings):
         settings.API_TOKEN_MAX_DAYS = 90
         client.force_login(staff_user)
@@ -143,7 +160,7 @@ class TestTokensPage:
         assert ApiToken.objects.filter(user=staff_user).count() == 2
 
     def test_revoke_own_token(self, client, staff_user):
-        token, raw = ApiToken.create_for(staff_user, 'x')
+        token, raw = ApiToken.create_for(staff_user, 'x', _in_30_days())
         client.force_login(staff_user)
         assert client.post(reverse('revoke_api_token', args=[token.pk])).status_code == 302
         assert not ApiToken.objects.exists()
@@ -156,7 +173,7 @@ class TestTokensPage:
         assert ApiToken.objects.filter(pk=token.pk).exists()
 
     def test_revoke_needs_post(self, client, staff_user):
-        token, _ = ApiToken.create_for(staff_user, 'x')
+        token, _ = ApiToken.create_for(staff_user, 'x', _in_30_days())
         client.force_login(staff_user)
         assert client.get(reverse('revoke_api_token', args=[token.pk])).status_code == 405
 

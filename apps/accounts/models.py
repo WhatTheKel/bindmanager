@@ -57,4 +57,8 @@ class ApiToken(models.Model):
 
     @property
     def is_expired(self) -> bool:
-        return self.expires_at is not None and self.expires_at <= timezone.now()
+        if self.expires_at is None:
+            # A token without expiry only lasts while the policy allows one
+            # for its owner, so a demoted superuser's token stops working.
+            return settings.API_TOKEN_MAX_DAYS > 0 and not self.user.is_superuser
+        return self.expires_at <= timezone.now()
