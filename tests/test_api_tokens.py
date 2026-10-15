@@ -116,6 +116,25 @@ class TestTokensPage:
         client.post(reverse('api_tokens'), data)
         assert not ApiToken.objects.exists()
 
+    def test_superuser_can_create_non_expiring(self, client, settings):
+        settings.API_TOKEN_MAX_DAYS = 90
+        boss = User.objects.create_superuser('boss', 'b@example.com', 'x')
+        client.force_login(boss)
+        page = client.get(reverse('api_tokens')).content.decode()
+        assert 'No expiry' in page
+        assert '<option value="30" selected>' in page   # default stays 30 days
+        client.post(reverse('api_tokens'), {'name': 'monitoring', 'days': 0})
+        token = ApiToken.objects.get(user=boss)
+        assert token.expires_at is None and not token.is_expired
+        assert 'no expiry' in AuditLog.objects.get(entity_type='api_token').detail
+
+    def test_staff_cannot_create_non_expiring(self, client, staff_user, settings):
+        settings.API_TOKEN_MAX_DAYS = 90
+        client.force_login(staff_user)
+        assert 'No expiry' not in client.get(reverse('api_tokens')).content.decode()
+        client.post(reverse('api_tokens'), {'name': 'x', 'days': 0})
+        assert not ApiToken.objects.exists()
+
     def test_per_user_limit(self, client, staff_user, settings):
         settings.API_TOKENS_PER_USER = 2
         client.force_login(staff_user)
@@ -172,6 +191,13 @@ class TestExpiryChoices:
     def test_zero_allows_no_expiry(self, settings):
         settings.API_TOKEN_MAX_DAYS = 0
         assert expiry_choices()[-1] == (0, 'No expiry')
+
+    def test_superuser_always_offered_no_expiry(self, settings, staff_user):
+        settings.API_TOKEN_MAX_DAYS = 90
+        boss = User.objects.create_superuser('boss', 'b@example.com', 'x')
+        assert expiry_choices(boss) == [(7, '7 days'), (30, '30 days'), (90, '90 days'),
+                                        (0, 'No expiry')]
+        assert (0, 'No expiry') not in expiry_choices(staff_user)
 
 
 def test_user_menu_links_to_tokens(client, regular_user):

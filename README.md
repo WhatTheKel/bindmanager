@@ -152,7 +152,8 @@ SESSION_COOKIE_AGE=28800
 TRUSTED_PROXY_COUNT=1
 
 # Longest expiry users may choose for personal API tokens (days, default 90;
-# 0 also allows tokens that never expire — not recommended).
+# 0 also allows tokens that never expire — not recommended). Superusers can
+# always choose "No expiry".
 API_TOKEN_MAX_DAYS=90
 ```
 
@@ -470,7 +471,8 @@ Every endpoint needs authentication — there are three ways:
 | Session | (login cookie) | The browser, while logged in |
 
 **Personal API tokens:** user menu (top right) → **API tokens** → name it,
-pick an expiry (up to `API_TOKEN_MAX_DAYS`, default 90 days) → copy the
+pick an expiry (up to `API_TOKEN_MAX_DAYS`, default 90 days; superusers can
+also pick **No expiry**) → copy the
 token, which is shown only once. It acts as that user with their role,
 shows when and from where it was last used, and can be revoked there.
 Deactivating a user stops all their tokens; a superuser can revoke all of
@@ -555,7 +557,7 @@ The following controls are active out of the box:
 | API rate limiting | DRF throttling — 20/min anonymous, 300/min authenticated, 300/min per pull-agent key, applied to every REST endpoint |
 | Audit log integrity | Append-only from application code; add/change/delete disabled in the Django admin |
 | API docs | `/api/v1/` requires `is_superuser=True` — staff-only users are redirected to login |
-| Personal API tokens | Only a SHA-256 hash is stored; shown once at creation; expire after at most `API_TOKEN_MAX_DAYS` (default 90); refused for deactivated users; revocable by the owner, or all at once by a superuser; create/revoke audited without the token |
+| Personal API tokens | Only a SHA-256 hash is stored; shown once at creation; expire after at most `API_TOKEN_MAX_DAYS` (default 90), except that a superuser may create one that never expires; refused for deactivated users; revocable by the owner, or all at once by a superuser; create/revoke audited without the token |
 | No password reset by email | Only `/accounts/login/` and `/accounts/logout/` are routed — Django's password reset/change pages aren't exposed (no mail server is configured, and SSO users have no local password). A superuser sets local passwords in `/admin/` or with `manage.py changepassword` |
 | Dependency pinning | All packages pinned to exact versions in `requirements.txt` |
 | Least privilege | Container drops to a non-root `django` user at runtime via `gosu` |

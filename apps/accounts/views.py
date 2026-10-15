@@ -60,14 +60,18 @@ class LockoutTokenObtainPairView(TokenObtainPairView):
 _NEW_TOKEN_SESSION_KEY = 'new_api_token'
 
 
-def expiry_choices():
-    """(days, label) pairs allowed by API_TOKEN_MAX_DAYS; 0 days = no expiry."""
+def expiry_choices(user=None):
+    """(days, label) pairs allowed by API_TOKEN_MAX_DAYS; 0 days = no expiry.
+
+    Superusers may always choose no expiry; everyone else only when
+    API_TOKEN_MAX_DAYS is 0.
+    """
     max_days = settings.API_TOKEN_MAX_DAYS
     days = [7, 30, 90, 365]
     if max_days > 0:
         days = sorted({d for d in days if d <= max_days} | {max_days})
     choices = [(d, f'{d} days') for d in days]
-    if max_days == 0:
+    if max_days == 0 or (user is not None and user.is_superuser):
         choices.append((0, 'No expiry'))
     return choices
 
@@ -84,7 +88,7 @@ def api_tokens(request):
     """List, create and revoke the current user's personal API tokens."""
     if request.method == 'POST':
         name = (request.POST.get('name') or '').strip()[:100]
-        allowed = dict(expiry_choices())
+        allowed = dict(expiry_choices(request.user))
         try:
             days = int(request.POST.get('days', ''))
         except ValueError:
@@ -107,11 +111,12 @@ def api_tokens(request):
             return redirect('api_tokens')
         return redirect('api_tokens')
 
+    choices = expiry_choices(request.user)
     return render(request, 'accounts/api_tokens.html', {
         'tokens': request.user.api_tokens.all(),
         'new_token': request.session.pop(_NEW_TOKEN_SESSION_KEY, None),
-        'expiry_choices': expiry_choices(),
-        'default_days': 30 if 30 in dict(expiry_choices()) else expiry_choices()[0][0],
+        'expiry_choices': choices,
+        'default_days': 30 if 30 in dict(choices) else choices[0][0],
         'max_tokens': settings.API_TOKENS_PER_USER,
         'api_base': request.build_absolute_uri('/api/v1/'),
     })
