@@ -121,6 +121,10 @@ docker compose restart nginx
   while `web` restarts.
 - On start, `web` runs `migrate` (database changes) and `collectstatic`
   (CSS/JS) by itself — nothing to run by hand.
+- `--build` reuses cached layers, so it does **not** pick up new Debian
+  security packages (BIND, OpenSSL, …). For a security update, rebuild from
+  scratch first: `docker compose build --pull --no-cache`, then run the
+  `up` command above.
 - **Always restart nginx afterwards.** nginx looks up the `web` container's
   address once, when it starts. A rebuild can give `web` a new address, and
   nginx then answers every page with **502 Bad Gateway** until restarted.
