@@ -59,7 +59,7 @@ later without changing how the app itself works.
 
 | Requirement | Notes |
 |---|---|
-| A Debian 12 / Ubuntu 22.04+ VM with a static IP | On RHEL 8, 9 or 10 use [`INSTALL-RHEL.md`](INSTALL-RHEL.md) — package names, paths, SELinux and the agent's Python version all differ |
+| A Debian 13 (or 12) / Ubuntu 22.04+ VM with a static IP | Prefer Debian 13: its BIND 9.20 gets security fixes first (Debian 12's 9.18 had no fix for CVE-2026-94300 when v0.2.12 shipped). On RHEL 8, 9 or 10 use [`INSTALL-RHEL.md`](INSTALL-RHEL.md) — package names, paths, SELinux and the agent's Python version all differ |
 | Docker + Docker Compose | For the BindManager app stack |
 | Root or sudo access | To install MariaDB and manage systemd units |
 | No existing zone data to migrate | If you *do* have zones from another system, import them via the Django admin or API after this guide — not covered here |

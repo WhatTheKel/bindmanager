@@ -109,6 +109,12 @@ Skim the diff of `.env.example` from 0.1 for any you might need.
 > nothing else uses it. Queued tasks and lockout counters in the old Redis
 > aren't carried over; beat re-dispatches dirty zones within a minute.
 
+> **Upgrading from 0.2.11 or older — security release, rebuild from scratch.**
+> 0.2.12 moves the `bind` image to Debian 13 (BIND 9.20) and nginx to 1.30.
+> A plain `--build` reuses cached layers and keeps the old BIND, so run
+> `docker compose build --pull --no-cache` before 1.3. No `.env` or config
+> changes needed.
+
 ### 1.3 Rebuild and restart
 
 ```bash
