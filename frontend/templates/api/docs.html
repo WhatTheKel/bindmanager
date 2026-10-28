@@ -503,7 +503,11 @@
             <span class="method get">GET</span>
             <code class="ep-path">/api/v1/zones/{id}/</code>
           </div>
-          <p class="ep-desc">Get full zone details including all nested records and nameservers.</p>
+          <p class="ep-desc">Get full zone details including all nested records and nameservers.
+            <code>serving</code> says, per active nameserver, whether it serves <code>published_serial</code>:
+            <code>live</code>, <code>updating</code> (its agent hasn't run since the change),
+            <code>behind</code> (it ran and still serves an older version, or has been silent 10 minutes since),
+            or <code>unknown</code> (agent older than 0.2.13). Poll it after a change to know when it's live.</p>
         </div>
         <div class="ep-body">
           <div class="ep-label">Response</div>
@@ -521,6 +525,10 @@
   "minimum_ttl": 86400,
   "default_ttl": 3600,
   "is_dirty":    false,
+  "published_serial": 2026070101,
+  "serving": [
+    { "nameserver": "ns1.example.com", "state": "live", "serial": 2026070101 }
+  ],
   "nameservers": [
     { "id": 1, "name": "ns1.example.com", "address": "10.0.0.1", "config_dir": "/etc/bind/zones", "is_active": true }
   ],

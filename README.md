@@ -249,7 +249,8 @@ bindmanager/
 │       │   ├── 0003_nameserver_api_key.py
 │       │   ├── 0004_zone_published_version.py      # last validated zone file served to agents
 │       │   ├── 0005_zone_sync_lock_optional_creator.py  # per-zone sync lock; creator optional
-│       │   └── 0006_nameserver_agent_checkin.py    # agent version + last check-in per nameserver
+│       │   ├── 0006_nameserver_agent_checkin.py    # agent version + last check-in per nameserver
+│       │   └── 0007_serving_status.py              # serial each nameserver serves; zone published_at
 │       ├── models.py           # Zone, Record, NameServer, AuditLog
 │       ├── tasks.py            # Celery: sync_dirty_zones dispatcher (+ central cleanup) + per-zone sync_zone task
 │       ├── templatetags/
@@ -308,6 +309,7 @@ bindmanager/
 ├── tests/
 │   ├── conftest.py             # Shared fixtures (staff_user, regular_user, zone, nameserver)
 │   ├── test_agent_api.py       # NameServer API key + pull-agent endpoints (published versions) + agent rate limit (16 tests)
+│   ├── test_serving_status.py  # Agent reports served serials; live/updating/behind per nameserver; zone page, dashboard + API (23 tests)
 │   ├── test_agent_version.py   # Agent reports its version; check-in recorded; Outdated/Unknown/Stale/Never shown; API key masked, shown once, regenerate (18 tests)
 │   ├── test_api_tokens.py      # Personal API tokens: SSO use, roles, hash-only, expiry, revoke, show-once (26 tests)
 │   ├── test_e2e_fixes.py       # Live-test fixes: long TXT split, named load check (app + agent), CAA/host-name/CNAME-target rules, orphan PTRs (50 tests)
@@ -516,6 +518,7 @@ curl http://<host>:81/api/v1/zones/ \
 | GET | `/api/v1/audit/` | Audit log (read-only) |
 | GET | `/api/v1/agent/zones/` | Pull agent: zones assigned to this nameserver (`Authorization: ApiKey <key>`, not JWT) |
 | GET | `/api/v1/agent/zones/{name}/` | Pull agent: the last validated (published) zone file for one assigned zone |
+| POST | `/api/v1/agent/status/` | Pull agent (0.2.13+): `{"serving": {"<zone>": <serial or null>}}`, what named serves after each run |
 | POST | `/api/token/` | Obtain JWT access + refresh tokens |
 | POST | `/api/token/refresh/` | Refresh JWT access token |
 
@@ -707,6 +710,13 @@ release is also a git tag (`v0.2.0`, …).
   it on every run; Manage → Nameservers shows it with the last check-in and
   flags *Outdated*, *Unknown* (agents before 0.2.4), *Never* and *Stale*
   (no check-in for 10 minutes) — the dashboard shows a notice too.
+- **Is my change live?** Agents 0.2.13+ also report the serial named is
+  serving for each zone (`rndc zonestatus`). The zone page shows each
+  nameserver as ✓ live, ⏳ updating (its agent hasn't run since the change)
+  or ✗ behind (it ran and still serves an older version, or has been silent
+  for 10 minutes since); the dashboard lists every zone that is behind, and
+  `GET /api/v1/zones/{id}/` returns the same as `serving`. Older agents show
+  as *?* until updated.
 
 ---
 

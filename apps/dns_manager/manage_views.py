@@ -56,6 +56,18 @@ def _agents_needing_attention(nameservers) -> int:
                if ns.is_active and (ns.agent_status != 'current' or ns.agent_is_stale))
 
 
+def _zones_behind() -> list[tuple[Zone, list[str]]]:
+    """(zone, names of the nameservers behind) for every zone a nameserver
+    isn't serving at the published serial when it should be."""
+    result = []
+    for zone in Zone.objects.filter(published_serial__isnull=False) \
+            .prefetch_related('nameservers').order_by('name'):
+        behind = [ns.name for ns, state, _ in zone.serving_status() if state == 'behind']
+        if behind:
+            result.append((zone, behind))
+    return result
+
+
 @staff_required
 def dashboard(request):
     zone_stats = Zone.objects.aggregate(
@@ -70,6 +82,7 @@ def dashboard(request):
         'recent_logs':  AuditLog.objects.select_related('user').order_by('-created_at')[:8],
         'dirty_zones':  Zone.objects.filter(is_dirty=True).order_by('name')[:5],
         'agents_need_attention': _agents_needing_attention(NameServer.objects.all()),
+        'behind_zones': _zones_behind(),
     })
 
 
@@ -121,6 +134,7 @@ def zone_detail(request, pk):
     records_page = paginator.get_page(request.GET.get('rpage'))
     return render(request, 'manage/zone_detail.html', {
         'zone': zone,
+        'serving_status': zone.serving_status(),
         'records_page': records_page,
         'record_count': paginator.count,
         'rs': rs,

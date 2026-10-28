@@ -17,6 +17,8 @@ On every invocation it:
   5. Runs `rndc reload` — a single full reload if the zone topology changed
      (add/remove), otherwise a per-zone `rndc reload <zone>` for each zone
      whose content changed.
+  6. Reports the serial named is serving for each assigned zone, so the app
+     can show which nameservers have the latest version.
 
 Only stdlib is used so this can run on a bare nameserver with no pip installs.
 
@@ -43,7 +45,7 @@ from pathlib import Path
 # "Releasing"). Sent as the User-Agent on every request; the app shows it
 # per nameserver in Manage > Nameservers and flags agents older than its own
 # copy of this file.
-AGENT_VERSION = '0.2.10'
+AGENT_VERSION = '0.2.13'
 
 log = logging.getLogger('bindmanager_agent')
 
@@ -98,19 +100,22 @@ class ApiError(Exception):
     pass
 
 
-def _api_get(cfg: Config, path: str) -> dict | list:
-    req = urllib.request.Request(
-        f'{cfg.api_url}{path}',
-        headers={
-            'Authorization': f'ApiKey {cfg.api_key}',
-            'Accept': 'application/json',
-            'User-Agent': f'bindmanager-agent/{AGENT_VERSION} '
-                          f'(python {sys.version_info.major}.{sys.version_info.minor})',
-        },
-    )
+def _api_request(cfg: Config, path: str, body: dict | None = None) -> dict | list | None:
+    headers = {
+        'Authorization': f'ApiKey {cfg.api_key}',
+        'Accept': 'application/json',
+        'User-Agent': f'bindmanager-agent/{AGENT_VERSION} '
+                      f'(python {sys.version_info.major}.{sys.version_info.minor})',
+    }
+    data = None
+    if body is not None:
+        data = json.dumps(body).encode('utf-8')
+        headers['Content-Type'] = 'application/json'
+    req = urllib.request.Request(f'{cfg.api_url}{path}', data=data, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=cfg.timeout) as resp:
-            return json.loads(resp.read().decode('utf-8'))
+            raw = resp.read()
+            return json.loads(raw.decode('utf-8')) if raw else None
     except urllib.error.HTTPError as exc:
         raise ApiError(f'{path} -> HTTP {exc.code}: {exc.read().decode("utf-8", "replace")}') from exc
     except urllib.error.URLError as exc:
@@ -118,11 +123,11 @@ def _api_get(cfg: Config, path: str) -> dict | list:
 
 
 def fetch_assigned_zones(cfg: Config) -> list[dict]:
-    return _api_get(cfg, '/agent/zones/')
+    return _api_request(cfg, '/agent/zones/')
 
 
 def fetch_zone_content(cfg: Config, name: str) -> dict:
-    return _api_get(cfg, f'/agent/zones/{name}/')
+    return _api_request(cfg, f'/agent/zones/{name}/')
 
 
 def load_manifest(cfg: Config) -> dict[str, int]:
@@ -263,6 +268,22 @@ def wait_for_serials(cfg: Config, expected: dict[str, int]) -> dict[str, int | N
         time.sleep(0.5)
 
 
+def report_serving(cfg: Config, names) -> None:
+    """Tell the app which serial named serves for each zone. Best effort: a
+    failure is logged and doesn't fail the run (an app before 0.2.13 has no
+    such endpoint)."""
+    try:
+        serving = {}
+        for name in names:
+            try:
+                serving[name] = loaded_serial(cfg, name)
+            except StatusUnavailable as exc:
+                log.debug('cannot report %s (rndc zonestatus: %s)', name, exc)
+        _api_request(cfg, '/agent/status/', {'serving': serving})
+    except Exception as exc:
+        log.warning('could not report serving serials: %s', exc)
+
+
 def reload_all(cfg: Config) -> None:
     result = subprocess.run([cfg.rndc_bin, 'reload'], capture_output=True, text=True)
     if result.returncode != 0:
@@ -272,6 +293,16 @@ def reload_all(cfg: Config) -> None:
 def sync(cfg: Config, dry_run: bool = False) -> int:
     assigned = fetch_assigned_zones(cfg)
     assigned_by_name = {z['name']: z for z in assigned}
+    if dry_run:
+        return _sync(cfg, assigned_by_name, dry_run=True)
+    # Report even when the run fails part-way: that's when it matters most.
+    try:
+        return _sync(cfg, assigned_by_name)
+    finally:
+        report_serving(cfg, assigned_by_name)
+
+
+def _sync(cfg: Config, assigned_by_name: dict[str, dict], dry_run: bool = False) -> int:
     manifest = load_manifest(cfg)
 
     changed: list[str] = []

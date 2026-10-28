@@ -123,17 +123,24 @@ class ZoneDetailSerializer(serializers.ModelSerializer):
     # Write-only: a subnet (192.0.2.0/24, 2001:db8::/32) to derive a reverse
     # zone's name, zone_type and ip_version from, instead of sending them.
     subnet = serializers.CharField(write_only=True, required=False)
+    # Per nameserver: live / updating / behind / unknown (Zone.serving_status)
+    serving = serializers.SerializerMethodField()
 
     class Meta:
         model  = Zone
         fields = [
             'id', 'name', 'zone_type', 'ip_version', 'serial',
             'refresh', 'retry', 'expire', 'minimum_ttl', 'default_ttl',
-            'is_dirty', 'nameservers', 'nameserver_ids', 'records',
+            'is_dirty', 'published_serial', 'serving',
+            'nameservers', 'nameserver_ids', 'records',
             'created_at', 'updated_at', 'subnet',
         ]
-        read_only_fields = ['serial', 'is_dirty', 'created_at', 'updated_at']
+        read_only_fields = ['serial', 'is_dirty', 'published_serial', 'created_at', 'updated_at']
         extra_kwargs = {'name': {'required': False}}
+
+    def get_serving(self, zone):
+        return [{'nameserver': ns.name, 'state': state, 'serial': served}
+                for ns, state, served in zone.serving_status()]
 
     def validate_name(self, value):
         try:

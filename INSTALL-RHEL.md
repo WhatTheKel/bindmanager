@@ -330,6 +330,8 @@ systemctl enable --now bindmanager-agent.timer
    dig @<this-vm-ip> ns1.<zone> A +norec
    ```
    All three should return `NOERROR` with the `aa` flag.
+5. In the app, the zone's page shows this nameserver as **✓ live**. After
+   any later change it should turn from ⏳ back to ✓ within ~3 minutes.
 
 ---
 

@@ -115,6 +115,11 @@ Skim the diff of `.env.example` from 0.1 for any you might need.
 > `docker compose build --pull --no-cache` before 1.3. No `.env` or config
 > changes needed.
 
+> **0.2.13 — update the agents to see whether changes are live.** The app
+> now shows, per zone, which nameservers serve the latest version. Only
+> agents 0.2.13+ report it; older ones keep working and show as *?* until
+> you update them (Part 2). No config changes on the nameservers.
+
 ### 1.3 Rebuild and restart
 
 ```bash

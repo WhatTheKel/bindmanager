@@ -379,6 +379,9 @@ systemctl list-timers bindmanager-agent.timer   # confirm it's scheduled (every 
    dig @localhost yourzone.example.com SOA
    dig @localhost www.yourzone.example.com A
    ```
+6. In the app, open the zone: under its name, this nameserver should show
+   **✓ live** (serving the latest serial). **✗ behind** means named didn't
+   load the new version; step 4's `journalctl` line says why.
 
 If all of that resolves, the full pipeline — UI → database → Celery sync
 → validation → agent pull → BIND9 → real DNS answer — is working.

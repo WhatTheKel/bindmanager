@@ -31,6 +31,32 @@
   </div>
 </div>
 
+{% if behind_zones %}
+<div class="card" style="margin-bottom:1.25rem;border-color:var(--danger)">
+  <div class="card-header">
+    <span style="color:var(--danger)">Not live on every nameserver ({{ behind_zones|length }})</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Zone</th><th>Serial</th><th>Nameservers behind</th></tr></thead>
+      <tbody>
+        {% for z, behind in behind_zones %}
+        <tr>
+          <td><a href="{% url 'dns_manager:manage_zone_detail' z.pk %}" style="font-weight:600">{{ z.name }}</a></td>
+          <td class="monospace">{{ z.published_serial }}</td>
+          <td class="monospace">{{ behind|join:", " }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card-body" style="font-size:.82rem;color:var(--text-muted)">
+    These nameservers are still serving an older version. Check the agent's log on each one
+    (<span class="monospace">journalctl -u bindmanager-agent</span>).
+  </div>
+</div>
+{% endif %}
+
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem">
 
   <!-- Dirty zones -->

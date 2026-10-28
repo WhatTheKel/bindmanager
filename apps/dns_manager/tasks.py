@@ -89,7 +89,7 @@ def sync_zone(zone_pk: int):
             return detail
 
         published = dict(serial=new_serial, published_content=content,
-                         published_serial=new_serial)
+                         published_serial=new_serial, published_at=timezone.now())
         # Only clear is_dirty if nothing changed since we read the zone:
         # every change bumps updated_at, so an edit made mid-sync (not in
         # `content`) leaves the zone dirty and it syncs again next round.

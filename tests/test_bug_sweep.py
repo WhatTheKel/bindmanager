@@ -349,6 +349,7 @@ class TestAgentPartialFailure:
         with patch.object(agent, 'fetch_assigned_zones', return_value=assigned), \
              patch.object(agent, 'fetch_zone_content', side_effect=content), \
              patch.object(agent, 'reload_all') as reload_all, \
+             patch.object(agent, 'report_serving'), \
              caplog.at_level(logging.ERROR):
             rc = agent.sync(cfg)
 

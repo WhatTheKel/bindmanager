@@ -389,6 +389,9 @@ dig @192.0.2.20 www.example.com A +norec
 dig @192.0.2.20 ns1.example.com A +norec
 ```
 
+In the app, the zone's page also shows this nameserver as **✓ live** once
+named serves the latest serial (**✗ behind**: check `journalctl -u bindmanager-agent`).
+
 Each should return `status: NOERROR` with the `aa` (authoritative answer)
 flag. If `ns1` comes back with no answer and no `aa`, it's the NS-vs-A
 mistake above.

@@ -18,6 +18,7 @@ urlpatterns = [
     path('', views.api_docs, name='api_docs'),
     # Pull-agent endpoints (apps/api/v1/agent_views.py) — API-key authenticated,
     # not part of the staff/JWT-facing router above.
+    path('agent/status/', agent_views.AgentStatusView.as_view(), name='agent-status'),
     path('agent/zones/', agent_views.AgentZoneListView.as_view(), name='agent-zone-list'),
     path('agent/zones/<str:name>/', agent_views.AgentZoneDetailView.as_view(), name='agent-zone-detail'),
     path('', include(router.urls)),

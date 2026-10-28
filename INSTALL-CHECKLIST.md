@@ -155,6 +155,7 @@ dig @NS_IP ns1.ZONE A +norec
 ```
 
 ☐ Manage → Nameservers shows this server's agent version, "checked in just now"
+☐ the zone's page shows this server as ✓ live
 ☐ all three `NOERROR` with the `aa` flag → done. Only now add the server
 to public NS records / the registrar.
 

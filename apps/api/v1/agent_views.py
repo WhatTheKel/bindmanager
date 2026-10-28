@@ -3,7 +3,9 @@ import re
 from django.utils import timezone
 from rest_framework import serializers, throttling
 from rest_framework.generics import ListAPIView, RetrieveAPIView
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from apps.dns_manager.models import Zone
 from .agent_auth import NameServerKeyAuthentication, IsNameServerAgent
@@ -115,3 +117,33 @@ class AgentZoneDetailView(RetrieveAPIView):
             'serial': zone.published_serial,
             'content': zone.published_content,
         }
+
+
+class AgentStatusView(APIView):
+    """
+    POST /api/v1/agent/status/   {"serving": {"<zone>": <serial or null>}}
+
+    Sent by the agent (0.2.13+) at the end of each run: the serial named is
+    serving for each assigned zone (`rndc zonestatus`), null if not loaded.
+    Zones named can't report on are left out. Shown per zone and nameserver
+    as live / updating / behind (Zone.serving_status).
+    """
+    authentication_classes = [NameServerKeyAuthentication]
+    permission_classes = [IsNameServerAgent]
+    throttle_classes = [AgentRateThrottle]
+
+    def post(self, request):
+        serving = request.data.get('serving') if isinstance(request.data, dict) else None
+        if not isinstance(serving, dict) or not all(
+                s is None or (isinstance(s, int) and not isinstance(s, bool))
+                for s in serving.values()):
+            raise ValidationError({'serving': 'Expected {"<zone>": <serial or null>}.'})
+        ns = request.auth
+        assigned = set(ns.zones.values_list('name', flat=True))
+        # As of the zone-list fetch that started this run (the check-in), not
+        # now: a zone published after that fetch wasn't seen by this run.
+        type(ns).objects.filter(pk=ns.pk).update(
+            serving={name: s for name, s in serving.items() if name in assigned},
+            serving_as_of=ns.agent_last_seen or timezone.now(),
+        )
+        return Response(status=204)

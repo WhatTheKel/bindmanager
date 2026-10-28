@@ -39,6 +39,11 @@ class NameServer(models.Model):
     # Reported by the pull agent on each run (see AgentZoneListView)
     agent_version = models.CharField(max_length=32, blank=True, default='')
     agent_last_seen = models.DateTimeField(null=True, blank=True)
+    # {zone name: serial named is serving, or None if not loaded}, as the
+    # agent last reported it (AgentStatusView), and the time of the zone-list
+    # fetch that report answers. Empty for agents before 0.2.13.
+    serving = models.JSONField(default=dict, blank=True)
+    serving_as_of = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -130,6 +135,7 @@ class Zone(models.Model):
     # edit never reaches — or removes the zone from — the nameservers.
     published_content = models.TextField(blank=True, default='')
     published_serial = models.PositiveBigIntegerField(null=True, blank=True)
+    published_at = models.DateTimeField(null=True, blank=True)
     # Set while a sync_zone task works on the zone, so overlapping dispatches
     # (beat runs every minute) skip it instead of writing concurrently.
     sync_lock_until = models.DateTimeField(null=True, blank=True)
@@ -157,6 +163,34 @@ class Zone(models.Model):
                 if update_fields is not None:
                     kwargs['update_fields'] = set(update_fields) | {'is_dirty', 'updated_at'}
         super().save(*args, **kwargs)
+
+    def serving_status(self) -> list[tuple['NameServer', str, int | None]]:
+        """(nameserver, state, serial it serves) for each active nameserver
+        of this zone.
+
+        'live': serving the published serial. 'updating': its agent hasn't
+        run since the zone was published. 'behind': its agent ran since and
+        still isn't serving it, or hasn't run for AGENT_STALE_AFTER_MINUTES
+        after the publish. 'unknown': the agent doesn't report (before 0.2.13).
+        """
+        from django.conf import settings
+        grace = timezone.timedelta(minutes=getattr(settings, 'AGENT_STALE_AFTER_MINUTES', 10))
+        result = []
+        for ns in self.nameservers.all():
+            if not ns.is_active:
+                continue
+            served = ns.serving.get(self.name)
+            if self.published_serial is None or ns.serving_as_of is None:
+                state = 'unknown'
+            elif served == self.published_serial:
+                state = 'live'
+            elif (self.published_at and ns.serving_as_of < self.published_at
+                    and timezone.now() - self.published_at < grace):
+                state = 'updating'
+            else:
+                state = 'behind'
+            result.append((ns, state, served))
+        return result
 
     def mark_dirty(self):
         self.is_dirty = True

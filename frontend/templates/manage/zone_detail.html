@@ -26,6 +26,17 @@
         <span style="color:var(--success)">✓ Synced</span>
       {% endif %}
     </div>
+    {% if serving_status %}
+    <div class="page-subtitle" style="display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.35rem">
+      {% if zone.published_serial %}<span>Serial {{ zone.published_serial }} on:</span>{% endif %}
+      {% for ns, state, served in serving_status %}
+        {% if state == 'live' %}<span class="badge badge-green" title="Serving serial {{ zone.published_serial }}">✓ {{ ns.name }}</span>
+        {% elif state == 'updating' %}<span class="badge badge-amber" title="Its agent hasn't run since this version was published">⏳ {{ ns.name }}</span>
+        {% elif state == 'behind' %}<span class="badge badge-red" title="Serving {{ served|default:'nothing' }} — check the agent's log on this nameserver">✗ {{ ns.name }} behind</span>
+        {% else %}<span class="badge badge-neutral" title="Its agent doesn't report what it serves (needs agent 0.2.13 or later)">? {{ ns.name }}</span>{% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
   </div>
   <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
     <a href="{% url 'dns_manager:manage_record_add' zone.pk %}" class="btn btn-primary">+ Add Record</a>

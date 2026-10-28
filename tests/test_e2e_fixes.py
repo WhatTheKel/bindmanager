@@ -271,6 +271,7 @@ class TestAgentLoadCheck:
         monkeypatch.setattr(mod, 'fetch_assigned_zones', lambda c: [{'name': 'example.com', 'serial': 2}])
         monkeypatch.setattr(mod, 'fetch_zone_content',
                             lambda c, n: {'name': n, 'serial': 2, 'content': 'new 2 ; Serial\n'})
+        monkeypatch.setattr(mod, 'report_serving', lambda c, names: None)
         return mod, cfg
 
     def _run(self, mod, cfg, zonestatus):
